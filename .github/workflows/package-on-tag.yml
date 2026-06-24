@@ -1,0 +1,88 @@
+name: package-on-tag
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+env:
+  BINARY_NAME: xylos
+
+jobs:
+  build:
+    name: build-${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            archive_ext: tar.gz
+            binary_suffix: ""
+          - name: macos-aarch64
+            os: macos-latest
+            archive_ext: tar.gz
+            binary_suffix: ""
+          - name: macos-x86_64
+            os: macos-13
+            archive_ext: tar.gz
+            binary_suffix: ""
+          - name: windows-x86_64
+            os: windows-latest
+            archive_ext: zip
+            binary_suffix: .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Prepare package metadata
+        id: meta
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PACKAGE_NAME="${BINARY_NAME}-${VERSION}-${{ matrix.platform.name }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "package_name=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Package archive (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist/${{ steps.meta.outputs.package_name }}
+          cp target/release/${BINARY_NAME}${{ matrix.platform.binary_suffix }} dist/${{ steps.meta.outputs.package_name }}/
+          cp README.md README.zh-CN.md config.example.toml dist/${{ steps.meta.outputs.package_name }}/
+          tar -czf dist/${{ steps.meta.outputs.package_name }}.tar.gz -C dist ${{ steps.meta.outputs.package_name }}
+
+      - name: Package archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/${{ steps.meta.outputs.package_name }}" | Out-Null
+          Copy-Item "target/release/${env:BINARY_NAME}${{ matrix.platform.binary_suffix }}" "dist/${{ steps.meta.outputs.package_name }}/"
+          Copy-Item "README.md","README.zh-CN.md","config.example.toml" "dist/${{ steps.meta.outputs.package_name }}/"
+          Compress-Archive -Path "dist/${{ steps.meta.outputs.package_name }}" -DestinationPath "dist/${{ steps.meta.outputs.package_name }}.zip" -Force
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.package_name }}
+          path: dist/${{ steps.meta.outputs.package_name }}.${{ matrix.platform.archive_ext }}
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.meta.outputs.package_name }}.${{ matrix.platform.archive_ext }}
