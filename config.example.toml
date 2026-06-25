@@ -4,15 +4,8 @@ port = 8080
 base_path = "/dav"
 create_root_if_missing = true
 
-# Optional TLS support. When enabled, xylos serves HTTPS on the configured host
-# and port using PEM-encoded certificate and private key files.
-# [server.tls]
-# enabled = true
-# cert_path = "/path/to/cert.pem"
-# key_path = "/path/to/key.pem"
-
 [auth]
-enabled = ["basic", "digest", "bearer"]
+enabled = ["basic"]
 realm = "xylos"
 digest_algorithm = "md5"
 nonce_ttl_secs = 300
@@ -29,19 +22,5 @@ username = "admin"
 root_dir = "/tmp/xylos-data/admin"
 # Replace with an Argon2 PHC hash of the admin password.
 password_hash = "$argon2id$v=19$m=19456,t=2,p=1$c29tZS1hZG1pbi1zYWx0$cmVwbGFjZS10aGlzLWFkbWluLWhhc2g"
-# Replace with MD5("admin:xylos:<admin-password>") when digest_algorithm = "md5".
-digest_ha1 = "00000000000000000000000000000000"
 enabled = true
 permissions = ["read", "write", "delete", "mkdir", "move", "copy"]
-tokens = ["replace-with-long-random-admin-token"]
-
-[[users]]
-username = "guest"
-root_dir = "/tmp/xylos-data/guest"
-# Replace with an Argon2 PHC hash of the guest password.
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$c29tZS1ndWVzdC1zYWx0$cmVwbGFjZS10aGlzLWd1ZXN0LWhhc2g"
-# Replace with MD5("guest:xylos:<guest-password>") when digest_algorithm = "md5".
-digest_ha1 = "00000000000000000000000000000000"
-enabled = true
-permissions = ["read"]
-tokens = ["replace-with-long-random-guest-token"]
