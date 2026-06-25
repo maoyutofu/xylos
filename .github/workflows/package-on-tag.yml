@@ -15,6 +15,7 @@ jobs:
   build:
     name: build-${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -28,7 +29,7 @@ jobs:
             archive_ext: tar.gz
             binary_suffix: ""
           - name: macos-x86_64
-            os: macos-13
+            os: macos-15-intel
             archive_ext: tar.gz
             binary_suffix: ""
           - name: windows-x86_64
