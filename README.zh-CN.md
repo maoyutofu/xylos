@@ -59,10 +59,11 @@ PHC 格式的密码哈希。Digest 认证使用 `digest_ha1`，它是配置中�
 
 ```sh
 cargo run -- hash-password
+cargo run -- hash-password 'your-password'
 cargo run -- hash-password --username admin --password 'your-password'
 ```
 
-`--password` 需要传入明文密码。Xylos 会帮你生成 Argon2 `password_hash`
+`PASSWORD` 或 `--password` 需要传入明文密码。Xylos 会帮你生成 Argon2 `password_hash`
 以及对应的 `digest_ha1`。
 
 所有解析后的路径在执行文件系统操作前都会先规范化，并检查是否位于生效的

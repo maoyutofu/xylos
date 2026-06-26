@@ -54,6 +54,12 @@ enum Command {
             help = "Plaintext password to hash"
         )]
         password: Option<String>,
+        #[arg(
+            value_name = "PASSWORD",
+            conflicts_with = "password",
+            help = "Plaintext password to hash"
+        )]
+        positional_password: Option<String>,
     },
 }
 
@@ -89,7 +95,13 @@ async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             realm,
             digest_algorithm,
             password,
-        }) => generate_password_config(username, realm, digest_algorithm.into(), password),
+            positional_password,
+        }) => generate_password_config(
+            username,
+            realm,
+            digest_algorithm.into(),
+            password.or(positional_password),
+        ),
         None => serve(cli).await,
     }
 }

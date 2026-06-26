@@ -59,10 +59,11 @@ Generate `password_hash` and `digest_ha1` lines for `config.toml`:
 
 ```sh
 cargo run -- hash-password
+cargo run -- hash-password 'your-password'
 cargo run -- hash-password --username admin --password 'your-password'
 ```
 
-`--password` expects the plaintext password. Xylos generates the Argon2
+`PASSWORD` or `--password` expects the plaintext password. Xylos generates the Argon2
 `password_hash` and matching `digest_ha1` for you.
 
 All resolved paths are canonicalized and checked against the effective root
