@@ -129,6 +129,7 @@ mod tests {
                 port: 8080,
                 base_path: "/dav".into(),
                 create_root_if_missing: true,
+                upload_idle_timeout_secs: 120,
                 tls: None,
             },
             auth: AuthConfig {

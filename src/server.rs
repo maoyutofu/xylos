@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use axum::Router;
 use axum::body::Body;
@@ -12,8 +13,11 @@ use axum::http::header::{
 use axum::http::{HeaderValue, Response, StatusCode};
 use axum::routing::any;
 use axum_server::tls_rustls::RustlsConfig;
+use futures_util::StreamExt;
 use percent_encoding::{AsciiSet, CONTROLS};
+use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
+use tokio::time::Duration;
 use tracing::{info, warn};
 
 use crate::auth::{NonceStore, authenticate, www_authenticate_values};
@@ -27,8 +31,8 @@ use crate::lock::{LockStore, submitted_lock_tokens, timeout_from_header};
 use crate::permission::required_permission;
 use crate::prop::{DeadProperty, PropStore, parse_proppatch};
 
-const MAX_PUT_BYTES: usize = 512 * 1024 * 1024;
 const MAX_PROPPATCH_BYTES: usize = 1024 * 1024;
+static NEXT_UPLOAD_ID: AtomicU64 = AtomicU64::new(1);
 const DESTINATION: HeaderName = HeaderName::from_static("destination");
 const DEPTH: HeaderName = HeaderName::from_static("depth");
 const DAV: HeaderName = HeaderName::from_static("dav");
@@ -245,7 +249,15 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
         DavMethod::Options => options_response(state.allowed_methods.clone()),
         DavMethod::Get => get_file_response(&effective_root, &dav_path.fs_path, false).await,
         DavMethod::Head => get_file_response(&effective_root, &dav_path.fs_path, true).await,
-        DavMethod::Put => put_file_response(&effective_root, &dav_path.fs_path, request).await,
+        DavMethod::Put => {
+            put_file_response(
+                &effective_root,
+                &dav_path.fs_path,
+                request,
+                state.config.server.upload_idle_timeout_secs,
+            )
+            .await
+        }
         DavMethod::Delete => delete_response(&effective_root, &dav_path.fs_path).await,
         DavMethod::Mkcol => mkcol_response(&effective_root, &dav_path.fs_path).await,
         DavMethod::Copy => {
@@ -632,6 +644,7 @@ async fn put_file_response(
     root_dir: &Path,
     path: &std::path::Path,
     request: Request,
+    upload_idle_timeout_secs: u64,
 ) -> Response<Body> {
     let existed = match existing_state_or_response(root_dir, path) {
         Ok(existed) => existed,
@@ -647,16 +660,71 @@ async fn put_file_response(
     };
     let secure_path = secure_parent.join(file_name);
 
-    let body = match to_bytes(request.into_body(), MAX_PUT_BYTES).await {
-        Ok(body) => body,
-        Err(_) => return empty_response(StatusCode::PAYLOAD_TOO_LARGE),
-    };
+    let temp_path = upload_temp_path(&secure_parent, file_name);
 
-    match tokio::fs::write(secure_path, body).await {
+    match stream_request_body_to_file(request.into_body(), &temp_path, upload_idle_timeout_secs)
+        .await
+    {
+        Ok(()) => {}
+        Err(_) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    match tokio::fs::rename(&temp_path, secure_path).await {
         Ok(()) if existed => empty_response(StatusCode::NO_CONTENT),
         Ok(()) => empty_response(StatusCode::CREATED),
-        Err(_) => empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => {
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            empty_response(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
+}
+
+async fn stream_request_body_to_file(
+    body: Body,
+    path: &Path,
+    upload_idle_timeout_secs: u64,
+) -> std::io::Result<()> {
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .await?;
+    let mut stream = body.into_data_stream();
+    let idle_timeout = upload_idle_timeout_secs
+        .checked_sub(1)
+        .map(|_| Duration::from_secs(upload_idle_timeout_secs));
+
+    while let Some(chunk) = next_body_chunk(&mut stream, idle_timeout).await? {
+        let chunk = chunk.map_err(std::io::Error::other)?;
+        file.write_all(&chunk).await?;
+    }
+
+    file.flush().await
+}
+
+async fn next_body_chunk(
+    stream: &mut axum::body::BodyDataStream,
+    idle_timeout: Option<Duration>,
+) -> std::io::Result<Option<Result<axum::body::Bytes, axum::Error>>> {
+    match idle_timeout {
+        Some(idle_timeout) => tokio::time::timeout(idle_timeout, stream.next())
+            .await
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::TimedOut, "upload timed out")),
+        None => Ok(stream.next().await),
+    }
+}
+
+fn upload_temp_path(parent: &Path, file_name: &std::ffi::OsStr) -> PathBuf {
+    let upload_id = NEXT_UPLOAD_ID.fetch_add(1, Ordering::Relaxed);
+    let mut temp_name = file_name.to_os_string();
+    temp_name.push(format!(
+        ".xylos-upload-{}-{upload_id}.tmp",
+        std::process::id()
+    ));
+    parent.join(temp_name)
 }
 
 async fn delete_response(root_dir: &Path, path: &std::path::Path) -> Response<Body> {

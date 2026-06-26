@@ -36,6 +36,8 @@ pub struct ServerConfig {
     pub base_path: String,
     #[serde(default)]
     pub create_root_if_missing: bool,
+    #[serde(default = "default_upload_idle_timeout_secs")]
+    pub upload_idle_timeout_secs: u64,
     #[serde(default)]
     pub tls: Option<TlsConfig>,
 }
@@ -253,6 +255,7 @@ impl AppConfig {
                 port,
                 base_path,
                 create_root_if_missing: true,
+                upload_idle_timeout_secs: default_upload_idle_timeout_secs(),
                 tls: None,
             },
             auth: AuthConfig {
@@ -331,6 +334,7 @@ impl AppConfig {
                 "server.port={port}, ",
                 "server.base_path={base_path}, ",
                 "server.create_root_if_missing={create_root_if_missing}, ",
+                "server.upload_idle_timeout_secs={upload_idle_timeout_secs}, ",
                 "server.tls={tls_summary}, ",
                 "auth.enabled=[{auth_enabled}], ",
                 "auth.realm={realm}, ",
@@ -347,6 +351,7 @@ impl AppConfig {
             port = self.server.port,
             base_path = self.server.base_path,
             create_root_if_missing = self.server.create_root_if_missing,
+            upload_idle_timeout_secs = self.server.upload_idle_timeout_secs,
             tls_summary = tls_summary,
             auth_enabled = auth_enabled,
             realm = self.auth.realm,
@@ -373,6 +378,10 @@ impl AuthScheme {
 
 fn default_auth_enabled() -> Vec<AuthScheme> {
     vec![AuthScheme::Basic]
+}
+
+fn default_upload_idle_timeout_secs() -> u64 {
+    120
 }
 
 fn validate_server(server: &ServerConfig) -> Result<(), AppError> {
@@ -602,6 +611,7 @@ mod tests {
                 port: 8080,
                 base_path: "/dav".into(),
                 create_root_if_missing: true,
+                upload_idle_timeout_secs: default_upload_idle_timeout_secs(),
                 tls: None,
             },
             auth: AuthConfig {
@@ -675,6 +685,10 @@ permissions = ["read"]
         let config = toml::from_str::<AppConfig>(raw).expect("config should parse");
 
         assert_eq!(config.auth.enabled, vec![AuthScheme::Basic]);
+        assert_eq!(
+            config.server.upload_idle_timeout_secs,
+            default_upload_idle_timeout_secs()
+        );
     }
 
     #[test]

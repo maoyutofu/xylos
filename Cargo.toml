@@ -9,6 +9,7 @@ axum-server = { version = "0.7", features = ["tls-rustls"] }
 argon2 = "0.5"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+futures-util = "0.3"
 httpdate = "1"
 md5 = "0.7"
 percent-encoding = "2"
@@ -18,7 +19,7 @@ rpassword = "7"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs", "io-util"] }
 toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
