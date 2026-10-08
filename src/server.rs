@@ -8,8 +8,10 @@ use axum::body::Body;
 use axum::body::to_bytes;
 use axum::extract::{Request, State};
 use axum::http::header::{
-    ALLOW, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName, LAST_MODIFIED, WWW_AUTHENTICATE,
+    ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName, LAST_MODIFIED,
+    WWW_AUTHENTICATE,
 };
+
 use axum::http::{HeaderValue, Response, StatusCode};
 use axum::routing::any;
 use axum_server::tls_rustls::RustlsConfig;
@@ -18,6 +20,7 @@ use percent_encoding::{AsciiSet, CONTROLS};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::time::Duration;
+use tower_http::services::ServeDir;
 use tracing::{info, warn};
 
 use crate::auth::{NonceStore, authenticate, www_authenticate_values};
@@ -95,10 +98,41 @@ fn app(config: AppConfig) -> Router {
         allowed_methods,
     };
 
-    Router::new()
+    let app = Router::new()
+        .nest_service(
+            "/app",
+            ServeDir::new("app/dist").append_index_html_on_directories(true),
+        )
         .fallback(any(handle_request))
-        .with_state(state)
+        .layer(axum::middleware::from_fn(app_cache_control))
+        .with_state(state);
+
+    app
 }
+
+fn should_no_cache(path: &str) -> bool {
+    path.starts_with("/app")
+        && (path.ends_with("/sw.js")
+            || path.ends_with("/index.html")
+            || path.ends_with("/manifest.webmanifest")
+            || path == "/app"
+            || path == "/app/")
+}
+
+async fn app_cache_control(req: Request, next: axum::middleware::Next) -> Response<Body> {
+    let path = req.uri().path().to_string();
+    let mut res = next.run(req).await;
+    if should_no_cache(&path) {
+        res.headers_mut().insert(
+            CACHE_CONTROL,
+            HeaderValue::from_static("no-cache, no-store, must-revalidate"),
+        );
+    }
+    res
+}
+
+
+
 
 async fn handle_request(State(state): State<AppState>, request: Request) -> Response<Body> {
     let method_name = request.method().as_str().to_owned();
@@ -1243,4 +1277,20 @@ mod tests {
             "invalid_destination"
         );
     }
+
+    #[test]
+    fn app_cache_control_detects_shell_paths() {
+        assert!(should_no_cache("/app"));
+        assert!(should_no_cache("/app/"));
+        assert!(should_no_cache("/app/index.html"));
+        assert!(should_no_cache("/app/sw.js"));
+        assert!(should_no_cache("/app/manifest.webmanifest"));
+        assert!(!should_no_cache("/app/assets/style.css"));
+        assert!(!should_no_cache("/app/assets/app.wasm"));
+        assert!(!should_no_cache("/dav"));
+        assert!(!should_no_cache("/dav/"));
+        assert!(!should_no_cache("/dav/file.txt"));
+    }
 }
+
+

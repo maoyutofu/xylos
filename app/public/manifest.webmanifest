@@ -1,0 +1,21 @@
+{
+  "name": "Xylos WebDAV Client",
+  "short_name": "Xylos",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#58c99f",
+  "icons": [
+    {
+      "src": "/app/assets/icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/app/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

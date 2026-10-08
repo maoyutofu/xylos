@@ -1,0 +1,17 @@
+[application]
+name = "xylos-webdav-client"
+default_platform = "web"
+asset_dir = "public"
+
+[web.app]
+title = "Xylos WebDAV"
+base_path = "/app/"
+
+[web.resource]
+style = ["/app/assets/style.css"]
+
+[web.resource.dev]
+style = ["/app/assets/style.css"]
+
+[web.watcher]
+watch_path = ["src", "public"]
