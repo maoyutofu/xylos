@@ -1,0 +1,10 @@
+{
+  "name": "Xylos WebDAV",
+  "short_name": "WebDAV",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#1f5eff",
+  "icons": []
+}

@@ -18,6 +18,7 @@ use percent_encoding::{AsciiSet, CONTROLS};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::time::Duration;
+use tower_http::services::ServeDir;
 use tracing::{info, warn};
 
 use crate::auth::{NonceStore, authenticate, www_authenticate_values};
@@ -95,9 +96,12 @@ fn app(config: AppConfig) -> Router {
         allowed_methods,
     };
 
-    Router::new()
+    let app = Router::new()
+        .nest_service("/app", ServeDir::new("app/dist").append_index_html_on_directories(true))
         .fallback(any(handle_request))
-        .with_state(state)
+        .with_state(state);
+
+    app
 }
 
 async fn handle_request(State(state): State<AppState>, request: Request) -> Response<Body> {
