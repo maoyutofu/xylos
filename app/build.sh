@@ -27,6 +27,18 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 cp -R "$PUBLIC_DIR"/. "$DIST_DIR"/
 
+# Ensure manifest and icons from public/ are copied to dist/
+cp -f "$SCRIPT_DIR"/public/manifest.webmanifest "$DIST_DIR"/ || true
+mkdir -p "$DIST_DIR"/assets
+cp -f "$SCRIPT_DIR"/public/assets/* "$DIST_DIR"/assets/ || true
+
+# Check if index.html in dist has manifest link, if not inject it before </head>
+if ! grep -q "manifest.webmanifest" "$DIST_DIR/index.html"; then
+    echo "Injecting PWA manifest and mobile meta tags into dist/index.html..."
+    PWA_HEAD='<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><link rel="manifest" href="/app/manifest.webmanifest"><meta name="theme-color" content="#58c99f"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Xylos"><meta name="mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="/app/assets/apple-touch-icon.png"><link rel="apple-touch-icon" sizes="180x180" href="/app/assets/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="/app/assets/icon-192.png"><link rel="icon" type="image/svg+xml" href="/app/assets/icon.svg">'
+    sed -i '' -e "s|</head>|${PWA_HEAD}</head>|g" "$DIST_DIR/index.html"
+fi
+
 echo "Static files copied to: $DIST_DIR"
 echo "Start Xylos from the project root with:"
 echo "  cargo run -- --config config.toml"

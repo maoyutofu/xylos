@@ -7,6 +7,7 @@ mod models;
 mod webdav;
 
 use components::file_browser::FileBrowser;
+use components::pwa_guide::{PwaGuideModal, PwaInstallBanner};
 use components::server_modal::ServerModal;
 use components::servers_page::ServersPage;
 use components::settings_page::SettingsPage;
@@ -38,6 +39,7 @@ fn App() -> Element {
     let mut testing_server_id = use_signal(|| None::<String>);
     let mut test_results = use_signal(HashMap::<String, bool>::new);
     let mut toast_message = use_signal(|| None::<(String, bool)>);
+    let mut pwa_guide_open = use_signal(|| false);
 
     use_effect(move || {
         let _ = dioxus::document::eval(
@@ -100,6 +102,11 @@ fn App() -> Element {
 
     rsx! {
         div { class: "window-shell",
+            // PWA Installation Banner
+            PwaInstallBanner {
+                on_open_guide: move |_| pwa_guide_open.set(true),
+            }
+
             // Client Body
             div { class: "window-body",
                 // Left Navigation Rail
@@ -148,6 +155,7 @@ fn App() -> Element {
                                     active_server.set(None);
                                     toast_message.set(Some(("已清除所有本地数据与缓存".into(), false)));
                                 },
+                                on_open_pwa_guide: move |_| pwa_guide_open.set(true),
                             }
                         },
 
@@ -161,6 +169,13 @@ fn App() -> Element {
                     server: maybe_srv,
                     on_save: handle_save_modal,
                     on_cancel: move |_| modal_server.set(None),
+                }
+            }
+
+            // PWA Install Guide Modal
+            if pwa_guide_open() {
+                PwaGuideModal {
+                    on_close: move |_| pwa_guide_open.set(false),
                 }
             }
 

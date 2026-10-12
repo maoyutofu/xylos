@@ -2,7 +2,10 @@ use dioxus::prelude::*;
 use gloo_storage::{LocalStorage, Storage};
 
 #[component]
-pub fn SettingsPage(on_clear_cache: EventHandler<()>) -> Element {
+pub fn SettingsPage(
+    on_clear_cache: EventHandler<()>,
+    on_open_pwa_guide: EventHandler<()>,
+) -> Element {
     let cleared = use_signal(|| false);
     let mut clear_confirm_open = use_signal(|| false);
 
@@ -36,6 +39,19 @@ pub fn SettingsPage(on_clear_cache: EventHandler<()>) -> Element {
                 h3 { style: "font-size: 16px; margin-bottom: 10px;", "跨域与 CORS 说明" }
                 p { style: "font-size: 13px; color: #6f716f; line-height: 1.6;",
                     "由于浏览器安全限制，若连接外部 WebDAV 服务，目标服务器需配置允许跨域（CORS）访问，并允许 PROPFIND、MKCOL、MOVE、COPY 等 WebDAV 特殊 HTTP 方法。"
+                }
+            }
+
+            div { style: "background: #fff; border: 1px solid #e4e6e8; border-radius: 6px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between;",
+                div {
+                    h3 { style: "font-size: 15px; margin-bottom: 4px;", "添加到主屏幕 (PWA)" }
+                    p { style: "font-size: 12px; color: #6f716f;", "安装到手机主屏幕可移除浏览器地址栏，享受原生应用全屏体验" }
+                }
+                button {
+                    class: "btn-secondary",
+                    style: "color: var(--app-primary); border-color: var(--app-primary);",
+                    onclick: move |_| on_open_pwa_guide.call(()),
+                    "查看安装指引"
                 }
             }
 
