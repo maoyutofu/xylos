@@ -26,12 +26,42 @@ pub fn is_ios_device() -> bool {
         .unwrap_or(false)
 }
 
+pub fn is_mobile_device() -> bool {
+    web_sys::window()
+        .and_then(|w| {
+            let ua = w.navigator().user_agent().ok()?.to_lowercase();
+            let is_mobile_ua = ua.contains("iphone")
+                || ua.contains("ipad")
+                || ua.contains("ipod")
+                || ua.contains("android")
+                || ua.contains("mobile")
+                || ua.contains("webos")
+                || ua.contains("blackberry")
+                || ua.contains("phone");
+
+            if is_mobile_ua {
+                return Some(true);
+            }
+
+            // Check mobile screen width and coarse pointer (touch device)
+            if let Ok(Some(mql)) = w.match_media("(max-width: 768px) and (pointer: coarse)") {
+                if mql.matches() {
+                    return Some(true);
+                }
+            }
+
+            Some(false)
+        })
+        .unwrap_or(false)
+}
+
 #[component]
 pub fn PwaInstallBanner(on_open_guide: EventHandler<()>) -> Element {
     let mut dismissed = use_signal(|| false);
     let is_standalone = use_signal(is_standalone_mode);
+    let is_mobile = use_signal(is_mobile_device);
 
-    if is_standalone() || dismissed() {
+    if is_standalone() || dismissed() || !is_mobile() {
         return rsx! {};
     }
 

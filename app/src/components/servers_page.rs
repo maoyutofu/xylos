@@ -38,6 +38,14 @@ pub fn ServersPage(
     rsx! {
         div { class: "page-header",
             h1 { class: "page-title", "服务器" }
+            button {
+                class: "header-icon-btn",
+                style: "background: var(--app-primary); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;",
+                title: "添加服务器",
+                onclick: move |_| on_add_server.call(()),
+                IconPlus {}
+                span { "添加" }
+            }
         }
 
         div { class: "server-cards-list",

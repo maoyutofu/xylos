@@ -39,7 +39,22 @@ fn App() -> Element {
     let mut testing_server_id = use_signal(|| None::<String>);
     let mut test_results = use_signal(HashMap::<String, bool>::new);
     let mut toast_message = use_signal(|| None::<(String, bool)>);
+    let mut toast_version = use_signal(|| 0u32);
     let mut pwa_guide_open = use_signal(|| false);
+
+    let mut show_toast = move |msg: String, is_err: bool| {
+        let next_v = toast_version() + 1;
+        toast_version.set(next_v);
+        toast_message.set(Some((msg, is_err)));
+
+        let delay_ms = if is_err { 4000 } else { 2800 };
+        spawn(async move {
+            gloo_timers::future::TimeoutFuture::new(delay_ms).await;
+            if toast_version() == next_v {
+                toast_message.set(None);
+            }
+        });
+    };
 
     use_effect(move || {
         let _ = dioxus::document::eval(
@@ -60,6 +75,7 @@ fn App() -> Element {
         current_tab.set(NavTab::Servers);
     };
 
+    let mut show_toast_test = show_toast;
     let handle_test_server = move |srv: ServerAccount| {
         let id = srv.id.clone();
         testing_server_id.set(Some(id.clone()));
@@ -69,12 +85,13 @@ fn App() -> Element {
             test_results.write().insert(id.clone(), ok);
             testing_server_id.set(None);
             match res {
-                Ok(()) => toast_message.set(Some((format!("服务器 \"{}\" 连接成功", srv.name), false))),
-                Err(err) => toast_message.set(Some((format!("连接失败: {err}"), true))),
+                Ok(()) => show_toast_test(format!("服务器 \"{}\" 连接成功", srv.name), false),
+                Err(err) => show_toast_test(format!("连接失败: {err}"), true),
             }
         });
     };
 
+    let mut show_toast_save = show_toast;
     let handle_save_modal = move |updated_srv: ServerAccount| {
         let mut list = servers();
         if let Some(pos) = list.iter().position(|s| s.id == updated_srv.id) {
@@ -85,9 +102,10 @@ fn App() -> Element {
         let _ = LocalStorage::set(SERVERS_STORAGE_KEY, &list);
         servers.set(list);
         modal_server.set(None);
-        toast_message.set(Some((format!("服务器 \"{}\" 保存成功", updated_srv.name), false)));
+        show_toast_save(format!("服务器 \"{}\" 保存成功", updated_srv.name), false);
     };
 
+    let mut show_toast_del = show_toast;
     let handle_delete_server = move |srv: ServerAccount| {
         let mut list = servers();
         list.retain(|s| s.id != srv.id);
@@ -97,7 +115,7 @@ fn App() -> Element {
             active_server.set(None);
             let _ = LocalStorage::delete(ACTIVE_SERVER_ID_KEY);
         }
-        toast_message.set(Some((format!("已删除服务器 \"{}\"", srv.name), false)));
+        show_toast_del(format!("已删除服务器 \"{}\"", srv.name), false);
     };
 
     rsx! {
@@ -129,8 +147,8 @@ fn App() -> Element {
                                     FileBrowser {
                                         server: srv,
                                         on_back_to_servers: move |_| active_server.set(None),
-                                        on_notify: move |msg| toast_message.set(Some((msg, false))),
-                                        on_error: move |err| toast_message.set(Some((err, true))),
+                                        on_notify: move |msg| show_toast(msg, false),
+                                        on_error: move |err| show_toast(err, true),
                                     }
                                 }
                             } else {
@@ -153,7 +171,7 @@ fn App() -> Element {
                                 on_clear_cache: move |_| {
                                     servers.set(Vec::new());
                                     active_server.set(None);
-                                    toast_message.set(Some(("已清除所有本地数据与缓存".into(), false)));
+                                    show_toast("已清除所有本地数据与缓存".into(), false);
                                 },
                                 on_open_pwa_guide: move |_| pwa_guide_open.set(true),
                             }
