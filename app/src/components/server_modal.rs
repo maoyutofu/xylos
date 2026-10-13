@@ -190,7 +190,7 @@ pub fn ServerModal(
                     }
 
                     if let Some(err) = form_error() {
-                        div { style: "color: #c84b4b; font-size: 13px;", "{err}" }
+                        div { style: "color: var(--app-destructive); font-size: 13px;", "{err}" }
                     }
                 }
                 div { class: "modal-footer",

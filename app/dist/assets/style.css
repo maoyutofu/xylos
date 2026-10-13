@@ -1,20 +1,73 @@
 :root {
-  --app-brand: #4655c7;
-  --app-brand-soft: #eef1ff;
-  --app-primary: #58c99f;
-  --app-primary-hover: #4bb38d;
-  --app-primary-soft: #c9f3e3;
-  --app-hover-surface: #eaf8f2;
-  --app-highlight-surface: #d7f1e6;
-  --app-bg: #ffffff;
+  /* Brand & Accent: Modern Indigo & Slate Blue */
+  --app-brand: #3b5bdb;
+  --app-brand-soft: #edf2ff;
+  --app-primary: #3b5bdb;
+  --app-primary-hover: #364fc7;
+  --app-primary-soft: #eef2ff;
+  --app-hover-surface: #f1f5f9;
+  --app-highlight-surface: #e0e7ff;
+
+  /* Surfaces & Backgrounds */
+  --app-bg: #f8fafc;
   --app-surface: #ffffff;
-  --app-subtle-surface: #f8f9fa;
-  --app-border: #e9e7e0;
-  --app-module-border: #e4e6e8;
-  --app-text: #111111;
-  --app-muted: #6f716f;
-  --app-destructive: #c84b4b;
-  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --app-subtle-surface: #f1f5f9;
+  --app-sidebar-bg: #ffffff;
+  --app-mobile-nav-bg: rgba(255, 255, 255, 0.88);
+
+  /* Borders & Dividers */
+  --app-border: #e2e8f0;
+  --app-module-border: #e2e8f0;
+
+  /* Typography & Status */
+  --app-text: #0f172a;
+  --app-text-muted: #64748b;
+  --app-muted: #64748b;
+  --app-success: #10b981;
+  --app-warning: #f59e0b;
+  --app-destructive: #ef4444;
+  --app-destructive-hover: #dc2626;
+  --app-destructive-soft: #fee2e2;
+
+  /* Typography & Shadows */
+  --app-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --app-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --app-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --app-brand: #4c6ef5;
+    --app-brand-soft: rgba(76, 110, 245, 0.15);
+    --app-primary: #4c6ef5;
+    --app-primary-hover: #5c7cfa;
+    --app-primary-soft: rgba(76, 110, 245, 0.18);
+    --app-hover-surface: #1e293b;
+    --app-highlight-surface: rgba(76, 110, 245, 0.25);
+
+    --app-bg: #0b0f17;
+    --app-surface: #131a26;
+    --app-subtle-surface: #182234;
+    --app-sidebar-bg: #101622;
+    --app-mobile-nav-bg: rgba(16, 22, 34, 0.88);
+
+    --app-border: #1e293b;
+    --app-module-border: #1e293b;
+
+    --app-text: #f1f5f9;
+    --app-text-muted: #94a3b8;
+    --app-muted: #94a3b8;
+    --app-success: #34d399;
+    --app-warning: #fbbf24;
+    --app-destructive: #f87171;
+    --app-destructive-hover: #ef4444;
+    --app-destructive-soft: rgba(239, 68, 68, 0.18);
+
+    --app-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --app-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.35);
+    --app-shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.45);
+  }
 }
 
 * {
@@ -68,7 +121,7 @@ button, input, select {
 /* Sidebar Navigation */
 .sidebar {
   width: 82px;
-  background: #ffffff;
+  background: var(--app-sidebar-bg);
   border-right: 1px solid var(--app-module-border);
   display: flex;
   flex-direction: column;
@@ -154,6 +207,27 @@ button, input, select {
   letter-spacing: -0.01em;
 }
 
+.btn-header-action {
+  background: var(--app-primary);
+  color: #ffffff;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(59, 91, 219, 0.2);
+  transition: all 0.15s ease;
+}
+
+.btn-header-action:hover {
+  background: var(--app-primary-hover);
+  box-shadow: 0 3px 8px rgba(59, 91, 219, 0.25);
+}
+
 /* Server List */
 .server-cards-list {
   display: flex;
@@ -163,25 +237,26 @@ button, input, select {
 }
 
 .server-card {
-  background: #ffffff;
+  background: var(--app-surface);
   border: 1px solid var(--app-module-border);
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
-  transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  box-shadow: var(--app-shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   display: flex;
   flex-direction: column;
 }
 
 .server-card:hover {
   border-color: var(--app-primary);
-  box-shadow: 0 4px 14px rgba(88, 201, 159, 0.12);
+  box-shadow: 0 4px 16px rgba(59, 91, 219, 0.12);
+  transform: translateY(-1px);
 }
 
 .server-card-header {
-  background: var(--app-primary);
+  background: linear-gradient(135deg, #3b5bdb 0%, #4c6ef5 100%);
   color: #ffffff;
-  padding: 10px 18px;
+  padding: 11px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -192,8 +267,9 @@ button, input, select {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 15px;
+  color: #ffffff;
 }
 
 .server-card-header-actions {
@@ -207,12 +283,13 @@ button, input, select {
   border: 0;
   color: #ffffff;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 5px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0.9;
+  transition: all 0.15s ease;
 }
 
 .header-icon-btn:hover {
@@ -227,6 +304,7 @@ button, input, select {
   justify-content: space-between;
   gap: 16px;
   cursor: pointer;
+  background: var(--app-surface);
 }
 
 .server-card-info {
@@ -255,12 +333,12 @@ button, input, select {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--app-primary);
+  background: var(--app-success);
   display: inline-block;
 }
 
 .status-dot.testing {
-  background: #ffbd2e;
+  background: var(--app-warning);
 }
 
 .status-dot.failed {
@@ -281,7 +359,7 @@ button, input, select {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--app-module-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--app-subtle-surface);
   color: var(--app-text);
   cursor: pointer;
@@ -295,7 +373,7 @@ button, input, select {
 }
 
 .tool-btn.danger:hover {
-  background: #fef2f2;
+  background: var(--app-destructive-soft);
   color: var(--app-destructive);
   border-color: var(--app-destructive);
 }
@@ -315,7 +393,7 @@ button, input, select {
   background: var(--app-primary);
   color: #ffffff;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 10px 28px;
   font-size: 14px;
   font-weight: 600;
@@ -323,11 +401,13 @@ button, input, select {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: 0 1px 3px rgba(59, 91, 219, 0.25);
+  transition: all 0.15s ease;
 }
 
 .btn-add-server:hover {
   background: var(--app-primary-hover);
+  box-shadow: 0 4px 12px rgba(59, 91, 219, 0.3);
 }
 
 /* Empty State */
@@ -404,7 +484,7 @@ button, input, select {
   flex: 1;
   height: 38px;
   border: 1px solid var(--app-module-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--app-subtle-surface);
   padding: 0 14px;
   font-size: 14px;
@@ -415,14 +495,15 @@ button, input, select {
 
 .path-input:focus {
   border-color: var(--app-primary);
-  background: #ffffff;
+  background: var(--app-surface);
+  box-shadow: 0 0 0 3px var(--app-brand-soft);
 }
 
 /* Modern Client File List View */
 .file-list-view {
-  background: #ffffff;
+  background: var(--app-surface);
   border: 1px solid var(--app-module-border);
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -443,7 +524,7 @@ button, input, select {
 }
 
 .file-list-row:hover {
-  background: #f8fafc;
+  background: var(--app-hover-surface);
 }
 
 .file-icon-box {
@@ -452,24 +533,24 @@ button, input, select {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 8px;
   margin-right: 14px;
   flex-shrink: 0;
 }
 
 .file-icon-box.folder {
-  color: var(--app-primary);
-  background: #eaf8f2;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
 }
 
 .file-icon-box.file {
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--app-text-muted);
+  background: var(--app-subtle-surface);
 }
 
 .file-icon-box.image {
   color: #3b82f6;
-  background: #eff6ff;
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .file-info-box {
@@ -517,7 +598,7 @@ button, input, select {
 
 .file-more-btn:hover,
 .file-more-btn.active {
-  background: #f1f5f9;
+  background: var(--app-subtle-surface);
   color: var(--app-text);
   border-color: var(--app-border);
 }
@@ -526,11 +607,11 @@ button, input, select {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 120px;
-  background: #ffffff;
+  min-width: 130px;
+  background: var(--app-surface);
   border: 1px solid var(--app-module-border);
   border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--app-shadow-lg);
   padding: 4px;
   z-index: 50;
   display: flex;
@@ -555,17 +636,17 @@ button, input, select {
 }
 
 .popover-item:hover {
-  background: #f1f5f9;
+  background: var(--app-hover-surface);
   color: var(--app-primary);
 }
 
 .popover-item.danger {
-  color: #dc2626;
+  color: var(--app-destructive);
 }
 
 .popover-item.danger:hover {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--app-destructive-soft);
+  color: var(--app-destructive-hover);
 }
 
 .popover-backdrop {
@@ -586,18 +667,19 @@ button, input, select {
 
 .grid-card {
   border: 1px solid var(--app-module-border);
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--app-surface);
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   display: flex;
   flex-direction: column;
 }
 
 .grid-card:hover {
   border-color: var(--app-primary);
-  box-shadow: 0 4px 12px rgba(88, 201, 159, 0.18);
+  box-shadow: 0 4px 16px rgba(59, 91, 219, 0.12);
+  transform: translateY(-1px);
 }
 
 .grid-card-preview {
@@ -607,11 +689,12 @@ button, input, select {
   align-items: center;
   justify-content: center;
   position: relative;
+  color: var(--app-text-muted);
 }
 
 .grid-card-preview.is-folder {
-  background: var(--app-primary);
-  color: #ffffff;
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
 }
 
 .grid-card-body {
@@ -620,7 +703,7 @@ button, input, select {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: #ffffff;
+  background: var(--app-surface);
   border-top: 1px solid var(--app-border);
 }
 
@@ -648,7 +731,9 @@ button, input, select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -657,11 +742,12 @@ button, input, select {
 }
 
 .modal-dialog {
-  background: #ffffff;
-  border-radius: 6px;
+  background: var(--app-surface);
+  border-radius: 12px;
+  border: 1px solid var(--app-module-border);
   width: 100%;
   max-width: 520px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--app-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -674,17 +760,18 @@ button, input, select {
 }
 
 .modal-header {
-  padding: 22px 24px 14px;
+  padding: 20px 24px 14px;
   font-size: 18px;
   font-weight: 700;
   color: var(--app-text);
+  border-bottom: 1px solid var(--app-border);
 }
 
 .modal-body {
-  padding: 0 24px 20px;
+  padding: 20px 24px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .form-field {
@@ -694,7 +781,7 @@ button, input, select {
 }
 
 .form-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--app-muted);
   font-weight: 500;
 }
@@ -709,7 +796,7 @@ button, input, select {
   width: 100%;
   height: 42px;
   border: 1px solid var(--app-module-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--app-subtle-surface);
   padding: 0 12px;
   font-size: 14px;
@@ -720,7 +807,8 @@ button, input, select {
 
 .form-input:focus {
   border-color: var(--app-primary);
-  background: #ffffff;
+  background: var(--app-surface);
+  box-shadow: 0 0 0 3px var(--app-brand-soft);
 }
 
 .input-suffix-btn {
@@ -749,7 +837,7 @@ button, input, select {
 }
 
 .switch-label-desc {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--app-muted);
   margin-top: 2px;
 }
@@ -773,7 +861,7 @@ button, input, select {
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background-color: #cbd5e1;
+  background-color: var(--app-border);
   transition: 0.2s;
   border-radius: 24px;
 }
@@ -788,6 +876,7 @@ button, input, select {
   background-color: white;
   transition: 0.2s;
   border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .switch input:checked + .switch-slider {
@@ -804,38 +893,52 @@ button, input, select {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
+  border-top: 1px solid var(--app-border);
 }
 
 .btn-secondary {
   background: transparent;
-  border: 0;
-  color: var(--app-primary);
+  border: 1px solid var(--app-module-border);
+  color: var(--app-text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   padding: 8px 16px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.15s ease;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
 .btn-secondary:hover {
   background: var(--app-hover-surface);
+  border-color: var(--app-border);
 }
 
 .btn-primary {
   background: var(--app-primary);
   color: #ffffff;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 9px 22px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(59, 91, 219, 0.2);
 }
 
 .btn-primary:hover {
   background: var(--app-primary-hover);
+  box-shadow: 0 4px 12px rgba(59, 91, 219, 0.25);
+}
+
+.btn-primary.btn-danger {
+  background: var(--app-destructive);
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.2);
+}
+
+.btn-primary.btn-danger:hover {
+  background: var(--app-destructive-hover);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
 }
 
 .btn-primary:disabled {
@@ -846,27 +949,29 @@ button, input, select {
 /* Context / Dropdown Menu */
 .context-menu {
   position: absolute;
-  background: #ffffff;
+  background: var(--app-surface);
   border: 1px solid var(--app-module-border);
-  border-radius: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  box-shadow: var(--app-shadow-lg);
   min-width: 140px;
   z-index: 500;
-  padding: 4px 0;
+  padding: 4px;
 }
 
 .context-menu-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 8px 12px;
   font-size: 13px;
   color: var(--app-text);
   cursor: pointer;
   background: transparent;
   border: 0;
+  border-radius: 6px;
   width: 100%;
   text-align: left;
+  transition: all 0.1s ease;
 }
 
 .context-menu-item:hover {
@@ -879,7 +984,8 @@ button, input, select {
 }
 
 .context-menu-item.danger:hover {
-  background: #fef2f2;
+  background: var(--app-destructive-soft);
+  color: var(--app-destructive-hover);
 }
 
 /* Toast Bar */
@@ -899,12 +1005,14 @@ button, input, select {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e293b;
-  color: #ffffff;
+  background: #0f172a;
+  color: #f8fafc;
   padding: 10px 22px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-weight: 500;
+  box-shadow: var(--app-shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -925,18 +1033,18 @@ button, input, select {
 
   .sidebar {
     width: 100%;
-    height: calc(52px + env(safe-area-inset-bottom, 0px));
-    min-height: calc(52px + env(safe-area-inset-bottom, 0px));
-    max-height: calc(52px + env(safe-area-inset-bottom, 0px));
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(56px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(56px + env(safe-area-inset-bottom, 0px));
     flex-direction: row;
     justify-content: space-around;
     align-items: center;
     padding: 0 16px env(safe-area-inset-bottom, 0px);
     border-right: 0;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--app-module-border);
     order: 2;
     flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.88);
+    background: var(--app-mobile-nav-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     z-index: 100;
@@ -955,7 +1063,7 @@ button, input, select {
     margin: 0;
     border-radius: 8px;
     background: transparent;
-    color: #64748b;
+    color: var(--app-muted);
     gap: 3px;
     font-size: 11px;
     font-weight: 500;
@@ -1000,19 +1108,19 @@ button, input, select {
 
   /* Mobile Server Card Tweaks */
   .server-card {
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+    border-radius: 12px;
+    box-shadow: var(--app-shadow-sm);
   }
 
   .server-card-header {
-    padding: 10px 14px;
-    border-top-left-radius: 9px;
-    border-top-right-radius: 9px;
+    padding: 11px 16px;
+    border-top-left-radius: 11px;
+    border-top-right-radius: 11px;
   }
 
   .server-card-body {
-    padding: 12px 14px;
-    gap: 10px;
+    padding: 12px 16px;
+    gap: 12px;
   }
 
   .server-url {
@@ -1022,8 +1130,8 @@ button, input, select {
   }
 
   .tool-btn {
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
   }
 
   /* Bottom sheet style for modals on mobile */
@@ -1033,9 +1141,9 @@ button, input, select {
   }
 
   .modal-dialog {
-    border-radius: 16px 16px 0 0;
+    border-radius: 20px 20px 0 0;
     max-width: 100%;
-    animation: sheetEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: sheetEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     max-height: 90dvh;
     overflow-y: auto;
   }
@@ -1056,14 +1164,14 @@ button, input, select {
 /* PWA Install Banner & Guide Modal */
 .pwa-banner {
   display: none;
-  background: #eaf8f2;
-  border-bottom: 1px solid #c9f3e3;
+  background: var(--app-brand-soft);
+  border-bottom: 1px solid var(--app-module-border);
   padding: 10px 16px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  color: #1e293b;
+  color: var(--app-text);
   z-index: 150;
 }
 
@@ -1106,8 +1214,8 @@ button, input, select {
   background: var(--app-primary);
   color: #ffffff;
   border: none;
-  padding: 5px 12px;
-  border-radius: 4px;
+  padding: 6px 14px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -1121,7 +1229,7 @@ button, input, select {
 .pwa-btn-dismiss {
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--app-muted);
   font-size: 18px;
   padding: 0 4px;
   cursor: pointer;
@@ -1157,12 +1265,12 @@ button, input, select {
 
 .pwa-step-desc {
   font-size: 13px;
-  color: #334155;
+  color: var(--app-muted);
   line-height: 1.5;
 }
 
 .pwa-step-desc strong {
-  color: #0f172a;
+  color: var(--app-text);
 }
 
 /* Settings Page */
@@ -1174,10 +1282,11 @@ button, input, select {
 }
 
 .settings-card {
-  background: #ffffff;
+  background: var(--app-surface);
   border: 1px solid var(--app-module-border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 16px 18px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .settings-item {
@@ -1231,7 +1340,7 @@ button, input, select {
 }
 
 .settings-action-btn.primary-outline:hover {
-  background: var(--app-hover-surface);
+  background: var(--app-primary-soft);
 }
 
 .settings-action-btn.danger-outline {
@@ -1241,16 +1350,16 @@ button, input, select {
 }
 
 .settings-action-btn.danger-outline:hover {
-  background: #fdf2f2;
+  background: var(--app-destructive-soft);
 }
 
 .lang-switch-group {
   display: inline-flex;
   flex-shrink: 0;
-  background: #f1f3f5;
+  background: var(--app-subtle-surface);
   padding: 3px;
-  border-radius: 7px;
-  border: 1px solid #e2e5e8;
+  border-radius: 8px;
+  border: 1px solid var(--app-module-border);
   white-space: nowrap;
 }
 
@@ -1258,21 +1367,21 @@ button, input, select {
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 500;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 0;
   cursor: pointer;
   white-space: nowrap;
   background: transparent;
-  color: #64748b;
+  color: var(--app-muted);
   transition: all 0.15s ease;
   user-select: none;
 }
 
 .lang-switch-btn.active {
-  background: #ffffff;
+  background: var(--app-surface);
   color: var(--app-primary);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--app-shadow-sm);
 }
 
 @media (max-width: 540px) {

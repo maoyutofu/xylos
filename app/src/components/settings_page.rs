@@ -62,7 +62,7 @@ pub fn SettingsPage(
                 div { class: "settings-item-info",
                     h3 { "{tr.settings_about_title()}" }
                     p { "{tr.settings_about_desc()}" }
-                    div { style: "margin-top: 10px; font-size: 13px; color: #111;",
+                    div { style: "margin-top: 10px; font-size: 13px; color: var(--app-text);",
                         strong { "{tr.settings_version_label()}" }
                         span { "0.2.0" }
                     }
@@ -149,7 +149,7 @@ pub fn SettingsPage(
                     onclick: move |e| e.stop_propagation(),
                     div { class: "modal-header", "{tr.settings_clear_confirm_title()}" }
                     div { class: "modal-body",
-                        p { style: "font-size: 14px; color: #111; line-height: 1.6;",
+                        p { style: "font-size: 14px; color: var(--app-text); line-height: 1.6;",
                             "{tr.settings_clear_confirm_desc()}"
                         }
                     }
@@ -160,8 +160,7 @@ pub fn SettingsPage(
                             "{tr.cancel()}"
                         }
                         button {
-                            class: "btn-primary",
-                            style: "background: #c84b4b;",
+                            class: "btn-primary btn-danger",
                             onclick: move |_| {
                                 clear_confirm_open.set(false);
                                 handle_clear();

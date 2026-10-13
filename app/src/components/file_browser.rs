@@ -552,7 +552,7 @@ pub fn FileBrowser(
                         onclick: move |e| e.stop_propagation(),
                         div { class: "modal-header", "{tr.modal_delete_confirm_title()}" }
                         div { class: "modal-body",
-                            p { style: "font-size: 14px; color: #111; line-height: 1.6;",
+                            p { style: "font-size: 14px; color: var(--app-text); line-height: 1.6;",
                                 if target.is_dir {
                                     "{tr.modal_delete_folder_desc(&target.name)}"
                                 } else {
@@ -563,8 +563,7 @@ pub fn FileBrowser(
                         div { class: "modal-footer",
                             button { class: "btn-secondary", onclick: move |_| delete_target.set(None), "{tr.cancel()}" }
                             button {
-                                class: "btn-primary",
-                                style: "background: #c84b4b;",
+                                class: "btn-primary btn-danger",
                                 onclick: move |_| handle_delete(),
                                 "{tr.delete()}"
                             }

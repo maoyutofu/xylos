@@ -43,8 +43,7 @@ pub fn ServersPage(
         div { class: "page-header",
             h1 { class: "page-title", "{tr.servers_title()}" }
             button {
-                class: "header-icon-btn",
-                style: "background: var(--app-primary); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;",
+                class: "btn-header-action",
                 title: "{tr.add_server()}",
                 onclick: move |_| on_add_server.call(()),
                 IconPlus {}
@@ -158,7 +157,7 @@ pub fn ServersPage(
                     onclick: move |e| e.stop_propagation(),
                     div { class: "modal-header", "{tr.delete_server_confirm_title()}" }
                     div { class: "modal-body",
-                        p { style: "font-size: 14px; color: #111; line-height: 1.6;",
+                        p { style: "font-size: 14px; color: var(--app-text); line-height: 1.6;",
                             "{tr.delete_server_confirm_desc(&target.name)}"
                         }
                     }
@@ -169,8 +168,7 @@ pub fn ServersPage(
                             "{tr.cancel()}"
                         }
                         button {
-                            class: "btn-primary",
-                            style: "background: #c84b4b;",
+                            class: "btn-primary btn-danger",
                             onclick: move |_| {
                                 on_delete_server.call(target.clone());
                                 delete_target.set(None);

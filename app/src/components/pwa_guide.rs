@@ -112,7 +112,7 @@ pub fn PwaGuideModal(on_close: EventHandler<()>) -> Element {
                 onclick: move |e| e.stop_propagation(),
                 div { class: "modal-header", "{tr.pwa_guide_title()}" }
                 div { class: "modal-body",
-                    p { style: "font-size: 13px; color: #475569; line-height: 1.6;",
+                    p { style: "font-size: 13px; color: var(--app-muted); line-height: 1.6;",
                         "{tr.pwa_guide_desc()}"
                     }
                     div { class: "pwa-guide-steps",
