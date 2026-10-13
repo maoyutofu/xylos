@@ -1,5 +1,6 @@
 use crate::components::icons::IconEye;
-use crate::models::{AuthType, ServerAccount};
+use crate::i18n::I18n;
+use crate::models::{AuthType, Language, ServerAccount};
 use dioxus::prelude::*;
 
 #[component]
@@ -8,6 +9,9 @@ pub fn ServerModal(
     on_save: EventHandler<ServerAccount>,
     on_cancel: EventHandler<()>,
 ) -> Element {
+    let lang = use_context::<Signal<Language>>()();
+    let tr = I18n::new(lang);
+
     let initial = server.clone().unwrap_or_else(|| ServerAccount {
         id: format!("srv_{}", js_sys::Date::now() as u64),
         name: String::new(),
@@ -38,11 +42,11 @@ pub fn ServerModal(
         let n = name().trim().to_string();
         let u = base_url().trim().to_string();
         if n.is_empty() {
-            form_error.set(Some("请输入服务器别名".into()));
+            form_error.set(Some(tr.err_name_required().into()));
             return;
         }
         if u.is_empty() {
-            form_error.set(Some("请输入服务地址".into()));
+            form_error.set(Some(tr.err_url_required().into()));
             return;
         }
 
@@ -73,20 +77,20 @@ pub fn ServerModal(
             div { class: "modal-dialog",
                 onclick: move |e| e.stop_propagation(),
                 div { class: "modal-header",
-                    if is_edit { "编辑服务器" } else { "添加服务器" }
+                    if is_edit { "{tr.modal_edit_server_title()}" } else { "{tr.modal_add_server_title()}" }
                 }
                 div { class: "modal-body",
                     div { class: "form-field",
-                        label { class: "form-label", "别名" }
+                        label { class: "form-label", "{tr.field_server_name()}" }
                         input {
                             class: "form-input",
-                            placeholder: "如：Default 或 个人网盘",
+                            placeholder: "{tr.placeholder_server_name()}",
                             value: "{name()}",
                             oninput: move |e| name.set(e.value()),
                         }
                     }
                     div { class: "form-field",
-                        label { class: "form-label", "服务地址" }
+                        label { class: "form-label", "{tr.field_server_url()}" }
                         input {
                             class: "form-input",
                             placeholder: "http://192.168.0.26:8080/dav/",
@@ -95,7 +99,7 @@ pub fn ServerModal(
                         }
                     }
                     div { class: "form-field",
-                        label { class: "form-label", "认证方式" }
+                        label { class: "form-label", "{tr.field_auth_type()}" }
                         select {
                             class: "form-input",
                             value: "{auth_str}",
@@ -116,21 +120,21 @@ pub fn ServerModal(
                     }
                     if auth_type() != AuthType::Bearer {
                         div { class: "form-field",
-                            label { class: "form-label", "用户名" }
+                            label { class: "form-label", "{tr.field_username()}" }
                             input {
                                 class: "form-input",
-                                placeholder: "用户名",
+                                placeholder: "{tr.placeholder_username()}",
                                 value: "{username()}",
                                 oninput: move |e| username.set(e.value()),
                             }
                         }
                         div { class: "form-field",
-                            label { class: "form-label", "密码" }
+                            label { class: "form-label", "{tr.field_password()}" }
                             div { class: "form-input-wrap",
                                 input {
                                     class: "form-input",
                                     r#type: if show_password() { "text" } else { "password" },
-                                    placeholder: "密码",
+                                    placeholder: "{tr.placeholder_password()}",
                                     value: "{password()}",
                                     oninput: move |e| password.set(e.value()),
                                 }
@@ -144,11 +148,11 @@ pub fn ServerModal(
                         }
                     } else {
                         div { class: "form-field",
-                            label { class: "form-label", "Bearer Token" }
+                            label { class: "form-label", "{tr.field_token()}" }
                             input {
                                 class: "form-input",
                                 r#type: "password",
-                                placeholder: "输入 Token",
+                                placeholder: "{tr.placeholder_token()}",
                                 value: "{token()}",
                                 oninput: move |e| token.set(e.value()),
                             }
@@ -157,8 +161,8 @@ pub fn ServerModal(
 
                     div { class: "switch-field",
                         div { class: "switch-label",
-                            div { class: "switch-label-title", "允许 HTTP" }
-                            div { class: "switch-label-desc", "仅建议在局域网或测试环境开启" }
+                            div { class: "switch-label-title", "{tr.switch_allow_http()}" }
+                            div { class: "switch-label-desc", "{tr.switch_allow_http_desc()}" }
                         }
                         label { class: "switch",
                             input {
@@ -172,8 +176,8 @@ pub fn ServerModal(
 
                     div { class: "switch-field",
                         div { class: "switch-label",
-                            div { class: "switch-label-title", "信任自签名证书" }
-                            div { class: "switch-label-desc", "仅对当前服务器生效" }
+                            div { class: "switch-label-title", "{tr.switch_trust_cert()}" }
+                            div { class: "switch-label-desc", "{tr.switch_trust_cert_desc()}" }
                         }
                         label { class: "switch",
                             input {
@@ -194,13 +198,13 @@ pub fn ServerModal(
                         class: "btn-secondary",
                         r#type: "button",
                         onclick: move |_| on_cancel.call(()),
-                        "取消"
+                        "{tr.cancel()}"
                     }
                     button {
                         class: "btn-primary",
                         r#type: "button",
                         onclick: handle_save,
-                        "保存"
+                        "{tr.save()}"
                     }
                 }
             }

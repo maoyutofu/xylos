@@ -2,7 +2,8 @@ use crate::components::icons::{
     IconArrowBack, IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconList, IconMore,
     IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
 };
-use crate::models::{Entry, ServerAccount, SortField, ViewMode};
+use crate::i18n::I18n;
+use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
     download_bytes, execute_write, format_date, format_size, is_online, join_path, list_directory,
     parent_path,
@@ -26,6 +27,9 @@ pub fn FileBrowser(
     on_notify: EventHandler<String>,
     on_error: EventHandler<String>,
 ) -> Element {
+    let lang = use_context::<Signal<Language>>()();
+    let tr = I18n::new(lang);
+
     let server_sig = use_signal(|| server.clone());
     let mut current_path = use_signal(|| "/".to_string());
     let mut entries = use_signal(Vec::<Entry>::new);
@@ -34,7 +38,6 @@ pub fn FileBrowser(
     let mut sort_field = use_signal(|| SortField::Name);
     let mut sort_asc = use_signal(|| true);
     let mut active_menu = use_signal(|| None::<String>);
-
 
     // Modals
     let mut new_folder_open = use_signal(|| false);
@@ -61,20 +64,8 @@ pub fn FileBrowser(
         });
     };
 
-
     use_effect(move || {
-        let srv = server_sig();
-        spawn(async move {
-            loading.set(true);
-            match list_directory(&srv, "/").await {
-                Ok(items) => {
-                    entries.set(items);
-                    current_path.set("/".into());
-                }
-                Err(err) => on_error.call(err),
-            }
-            loading.set(false);
-        });
+        load_dir("/".to_string());
     });
 
     let handle_upload = move |evt: FormEvent| {
@@ -87,7 +78,7 @@ pub fn FileBrowser(
             let bytes = match file.read_bytes().await {
                 Ok(b) => b,
                 Err(_) => {
-                    on_error.call("无法读取所选文件".into());
+                    on_error.call(tr.notify_read_failed().into());
                     loading.set(false);
                     return;
                 }
@@ -96,7 +87,7 @@ pub fn FileBrowser(
             let dest_path = join_path(&path, &name);
             match execute_write(&srv, reqwest::Method::PUT, &dest_path, Some(bytes.to_vec()), content_type, None, None).await {
                 Ok(()) => {
-                    on_notify.call(format!("文件 {name} 上传成功"));
+                    on_notify.call(tr.notify_uploaded(&name));
                     load_dir(path);
                 }
                 Err(err) => on_error.call(err),
@@ -116,7 +107,7 @@ pub fn FileBrowser(
                         "const a=document.createElement('a');a.href='data:application/octet-stream;base64,{encoded}';a.download={safe_name};a.click();"
                     );
                     let _ = dioxus::document::eval(&script);
-                    on_notify.call(format!("正在下载 {}", entry.name));
+                    on_notify.call(tr.notify_downloading(&entry.name));
                 }
                 Err(err) => on_error.call(err),
             }
@@ -126,7 +117,7 @@ pub fn FileBrowser(
     let handle_create_folder = move || {
         let name = new_folder_name().trim().to_string();
         if name.is_empty() {
-            on_error.call("请输入目录名称".into());
+            on_error.call(tr.err_folder_name_empty().into());
             return;
         }
         let srv = server_sig();
@@ -138,7 +129,7 @@ pub fn FileBrowser(
                 Ok(()) => {
                     new_folder_open.set(false);
                     new_folder_name.set(String::new());
-                    on_notify.call("目录创建成功".into());
+                    on_notify.call(tr.notify_folder_created().into());
                     load_dir(path);
                 }
                 Err(err) => on_error.call(err),
@@ -151,7 +142,7 @@ pub fn FileBrowser(
         let Some(target) = rename_target() else { return };
         let new_n = rename_name().trim().to_string();
         if new_n.is_empty() {
-            on_error.call("请输入新名称".into());
+            on_error.call(tr.err_new_name_empty().into());
             return;
         }
         let srv = server_sig();
@@ -163,7 +154,7 @@ pub fn FileBrowser(
                 Ok(()) => {
                     rename_target.set(None);
                     rename_name.set(String::new());
-                    on_notify.call("重命名成功".into());
+                    on_notify.call(tr.notify_renamed().into());
                     load_dir(parent);
                 }
                 Err(err) => on_error.call(err),
@@ -181,7 +172,7 @@ pub fn FileBrowser(
             match execute_write(&srv, reqwest::Method::DELETE, &target.href, None, None, None, target.etag).await {
                 Ok(()) => {
                     delete_target.set(None);
-                    on_notify.call(format!("已删除 {}", target.name));
+                    on_notify.call(tr.notify_deleted(&target.name));
                     load_dir(parent);
                 }
                 Err(err) => on_error.call(err),
@@ -210,13 +201,13 @@ pub fn FileBrowser(
             // Header Top
             div { class: "browser-header",
                 div { class: "browser-title-wrap",
-                    h2 { class: "browser-title", "{server.name} · 文件" }
+                    h2 { class: "browser-title", "{server.name} · {tr.files_title_suffix()}" }
                 }
                 div { class: "browser-actions",
                     // Sort toggle
                     button {
                         class: "tool-btn",
-                        title: "排序",
+                        title: "{tr.tooltip_sort()}",
                         onclick: move |_| {
                             let next = match sort_field() {
                                 SortField::Name => SortField::Modified,
@@ -232,7 +223,7 @@ pub fn FileBrowser(
                     // View mode toggle
                     button {
                         class: "tool-btn",
-                        title: if view_mode() == ViewMode::List { "网格视图" } else { "列表视图" },
+                        title: if view_mode() == ViewMode::List { tr.tooltip_grid_view() } else { tr.tooltip_list_view() },
                         onclick: move |_| {
                             view_mode.set(if view_mode() == ViewMode::List { ViewMode::Grid } else { ViewMode::List });
                         },
@@ -241,7 +232,7 @@ pub fn FileBrowser(
                     // Upload button
                     label {
                         class: "tool-btn",
-                        title: "上传文件",
+                        title: "{tr.tooltip_upload()}",
                         style: "cursor: pointer;",
                         IconUpload {}
                         input {
@@ -254,7 +245,7 @@ pub fn FileBrowser(
                     // New folder button
                     button {
                         class: "tool-btn",
-                        title: "新建目录",
+                        title: "{tr.tooltip_new_folder()}",
                         disabled: !is_online() || loading(),
                         onclick: move |_| new_folder_open.set(true),
                         IconNewFolder {}
@@ -266,7 +257,7 @@ pub fn FileBrowser(
             div { class: "path-bar",
                 button {
                     class: "tool-btn",
-                    title: "返回上一级",
+                    title: "{tr.tooltip_back()}",
                     disabled: current_path() == "/",
                     onclick: move |_| {
                         let p = parent_path(&current_path());
@@ -276,7 +267,7 @@ pub fn FileBrowser(
                 }
                 button {
                     class: "tool-btn",
-                    title: "刷新",
+                    title: "{tr.tooltip_refresh()}",
                     disabled: loading(),
                     onclick: move |_| load_dir(current_path()),
                     IconRefresh {}
@@ -296,13 +287,13 @@ pub fn FileBrowser(
             // Main files viewport
             if loading() && sorted_entries.is_empty() {
                 div { class: "empty-state",
-                    div { class: "empty-desc", "正在加载文件列表..." }
+                    div { class: "empty-desc", "{tr.loading_files()}" }
                 }
             } else if sorted_entries.is_empty() {
                 div { class: "empty-state",
                     div { class: "empty-icon", IconFolder { is_large: true } }
-                    div { class: "empty-title", "当前目录为空" }
-                    div { class: "empty-desc", "您可以点击右上角按钮上传文件或新建目录。" }
+                    div { class: "empty-title", "{tr.empty_directory_title()}" }
+                    div { class: "empty-desc", "{tr.empty_directory_desc()}" }
                 }
             } else if view_mode() == ViewMode::List {
                 div { class: "file-list-view",
@@ -320,9 +311,9 @@ pub fn FileBrowser(
                             let formatted_date = format_date(&item.modified);
                             let meta_text = if is_dir {
                                 if formatted_date.is_empty() {
-                                    "目录".to_string()
+                                    tr.folder_tag().to_string()
                                 } else {
-                                    format!("目录 · {formatted_date}")
+                                    tr.folder_tag_with_date(&formatted_date)
                                 }
                             } else {
                                 let sz = format_size(item.size.unwrap_or(0));
@@ -363,7 +354,7 @@ pub fn FileBrowser(
                                     div { class: "file-actions-box",
                                         button {
                                             class: if is_menu_open { "file-more-btn active" } else { "file-more-btn" },
-                                            title: "操作菜单",
+                                            title: "{tr.tooltip_actions_menu()}",
                                             onclick: move |e| {
                                                 e.stop_propagation();
                                                 if active_menu() == Some(item_href_for_menu.clone()) {
@@ -386,7 +377,7 @@ pub fn FileBrowser(
                                                             handle_download(item_download.clone());
                                                         },
                                                         IconDownload {}
-                                                        span { "下载" }
+                                                        span { "{tr.menu_download()}" }
                                                     }
                                                 }
                                                 button {
@@ -397,7 +388,7 @@ pub fn FileBrowser(
                                                         rename_target.set(Some(item_rename.clone()));
                                                     },
                                                     IconPencil {}
-                                                    span { "重命名" }
+                                                    span { "{tr.menu_rename()}" }
                                                 }
                                                 button {
                                                     class: "popover-item danger",
@@ -406,7 +397,7 @@ pub fn FileBrowser(
                                                         delete_target.set(Some(item_delete.clone()));
                                                     },
                                                     IconTrash {}
-                                                    span { "删除" }
+                                                    span { "{tr.menu_delete()}" }
                                                 }
                                             }
                                         }
@@ -451,7 +442,7 @@ pub fn FileBrowser(
                                         div { class: "grid-card-info",
                                             div { class: "grid-card-title", "{item.name}" }
                                             div { class: "grid-card-sub",
-                                                if is_dir { "目录" } else { "{format_size(item.size.unwrap_or(0))}" }
+                                                if is_dir { "{tr.folder_tag()}" } else { "{format_size(item.size.unwrap_or(0))}" }
                                             }
                                         }
                                         div {
@@ -460,7 +451,7 @@ pub fn FileBrowser(
                                             button {
                                                 class: "tool-btn",
                                                 style: "width: 28px; height: 28px;",
-                                                title: "重命名",
+                                                title: "{tr.menu_rename()}",
                                                 onclick: move |_| {
                                                     rename_name.set(item_rename.name.clone());
                                                     rename_target.set(Some(item_rename.clone()));
@@ -470,7 +461,7 @@ pub fn FileBrowser(
                                             button {
                                                 class: "tool-btn danger",
                                                 style: "width: 28px; height: 28px;",
-                                                title: "删除",
+                                                title: "{tr.menu_delete()}",
                                                 onclick: move |_| delete_target.set(Some(item_delete.clone())),
                                                 IconTrash {}
                                             }
@@ -497,13 +488,13 @@ pub fn FileBrowser(
                     onclick: move |_| new_folder_open.set(false),
                     div { class: "modal-dialog",
                         onclick: move |e| e.stop_propagation(),
-                        div { class: "modal-header", "新建目录" }
+                        div { class: "modal-header", "{tr.modal_new_folder_title()}" }
                         div { class: "modal-body",
                             div { class: "form-field",
-                                label { class: "form-label", "目录名称" }
+                                label { class: "form-label", "{tr.modal_new_folder_label()}" }
                                 input {
                                     class: "form-input",
-                                    placeholder: "输入新目录名称",
+                                    placeholder: "{tr.modal_new_folder_placeholder()}",
                                     value: "{new_folder_name()}",
                                     oninput: move |e| new_folder_name.set(e.value()),
                                     onkeydown: move |e| {
@@ -515,8 +506,8 @@ pub fn FileBrowser(
                             }
                         }
                         div { class: "modal-footer",
-                            button { class: "btn-secondary", onclick: move |_| new_folder_open.set(false), "取消" }
-                            button { class: "btn-primary", onclick: move |_| handle_create_folder(), "确定" }
+                            button { class: "btn-secondary", onclick: move |_| new_folder_open.set(false), "{tr.cancel()}" }
+                            button { class: "btn-primary", onclick: move |_| handle_create_folder(), "{tr.confirm()}" }
                         }
                     }
                 }
@@ -528,12 +519,13 @@ pub fn FileBrowser(
                     onclick: move |_| rename_target.set(None),
                     div { class: "modal-dialog",
                         onclick: move |e| e.stop_propagation(),
-                        div { class: "modal-header", "重命名" }
+                        div { class: "modal-header", "{tr.modal_rename_title()}" }
                         div { class: "modal-body",
                             div { class: "form-field",
-                                label { class: "form-label", "原名称: {target.name}" }
+                                label { class: "form-label", "{tr.modal_rename_label(&target.name)}" }
                                 input {
                                     class: "form-input",
+                                    placeholder: "{tr.modal_rename_placeholder()}",
                                     value: "{rename_name()}",
                                     oninput: move |e| rename_name.set(e.value()),
                                     onkeydown: move |e| {
@@ -545,8 +537,8 @@ pub fn FileBrowser(
                             }
                         }
                         div { class: "modal-footer",
-                            button { class: "btn-secondary", onclick: move |_| rename_target.set(None), "取消" }
-                            button { class: "btn-primary", onclick: move |_| handle_rename(), "保存" }
+                            button { class: "btn-secondary", onclick: move |_| rename_target.set(None), "{tr.cancel()}" }
+                            button { class: "btn-primary", onclick: move |_| handle_rename(), "{tr.save()}" }
                         }
                     }
                 }
@@ -558,23 +550,23 @@ pub fn FileBrowser(
                     onclick: move |_| delete_target.set(None),
                     div { class: "modal-dialog",
                         onclick: move |e| e.stop_propagation(),
-                        div { class: "modal-header", "确认删除" }
+                        div { class: "modal-header", "{tr.modal_delete_confirm_title()}" }
                         div { class: "modal-body",
                             p { style: "font-size: 14px; color: #111; line-height: 1.6;",
                                 if target.is_dir {
-                                    "确定要删除目录 \"{target.name}\" 及其内部的所有内容吗？此操作无法撤销。"
+                                    "{tr.modal_delete_folder_desc(&target.name)}"
                                 } else {
-                                    "确定要删除文件 \"{target.name}\" 吗？此操作无法撤销。"
+                                    "{tr.modal_delete_file_desc(&target.name)}"
                                 }
                             }
                         }
                         div { class: "modal-footer",
-                            button { class: "btn-secondary", onclick: move |_| delete_target.set(None), "取消" }
+                            button { class: "btn-secondary", onclick: move |_| delete_target.set(None), "{tr.cancel()}" }
                             button {
                                 class: "btn-primary",
                                 style: "background: #c84b4b;",
                                 onclick: move |_| handle_delete(),
-                                "删除"
+                                "{tr.delete()}"
                             }
                         }
                     }

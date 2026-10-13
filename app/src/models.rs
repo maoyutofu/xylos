@@ -3,6 +3,31 @@ use serde::{Deserialize, Serialize};
 pub const SERVERS_STORAGE_KEY: &str = "xylos.webdav.servers";
 pub const ACTIVE_SERVER_ID_KEY: &str = "xylos.webdav.active_server_id";
 pub const LEGACY_CONNECTION_KEY: &str = "xylos.webdav.connection";
+pub const LANGUAGE_STORAGE_KEY: &str = "xylos.webdav.language";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Language {
+    #[default]
+    Zh,
+    En,
+}
+
+#[allow(dead_code)]
+impl Language {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Language::Zh => "zh-CN",
+            Language::En => "en-US",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Language::Zh => "简体中文",
+            Language::En => "English",
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct ServerAccount {

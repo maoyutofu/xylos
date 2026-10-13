@@ -1165,3 +1165,136 @@ button, input, select {
   color: #0f172a;
 }
 
+/* Settings Page */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.settings-card {
+  background: #ffffff;
+  border: 1px solid var(--app-module-border);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-item-info h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--app-text);
+}
+
+.settings-item-info p {
+  font-size: 12px;
+  color: var(--app-muted);
+  line-height: 1.5;
+}
+
+.settings-action-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  width: 96px;
+  min-width: 96px;
+  padding: 7px 0;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.settings-action-btn.primary-outline {
+  color: var(--app-primary);
+  border: 1px solid var(--app-primary);
+  background: transparent;
+}
+
+.settings-action-btn.primary-outline:hover {
+  background: var(--app-hover-surface);
+}
+
+.settings-action-btn.danger-outline {
+  color: var(--app-destructive);
+  border: 1px solid var(--app-destructive);
+  background: transparent;
+}
+
+.settings-action-btn.danger-outline:hover {
+  background: #fdf2f2;
+}
+
+.lang-switch-group {
+  display: inline-flex;
+  flex-shrink: 0;
+  background: #f1f3f5;
+  padding: 3px;
+  border-radius: 7px;
+  border: 1px solid #e2e5e8;
+  white-space: nowrap;
+}
+
+.lang-switch-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 5px;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  background: transparent;
+  color: #64748b;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.lang-switch-btn.active {
+  background: #ffffff;
+  color: var(--app-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 540px) {
+  .settings-card {
+    padding: 14px 16px;
+  }
+
+  .settings-item.stack-mobile {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .settings-item.stack-mobile .lang-switch-group {
+    width: 100%;
+    display: flex;
+  }
+
+  .settings-item.stack-mobile .lang-switch-btn {
+    flex: 1;
+    text-align: center;
+    padding: 7px 0;
+  }
+}
+

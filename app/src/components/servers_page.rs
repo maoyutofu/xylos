@@ -1,7 +1,8 @@
 use crate::components::icons::{
     IconDns, IconPencil, IconPlus, IconQr, IconStorage, IconTrash, IconWifi,
 };
-use crate::models::ServerAccount;
+use crate::i18n::I18n;
+use crate::models::{Language, ServerAccount};
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -16,20 +17,23 @@ pub fn ServersPage(
     on_delete_server: EventHandler<ServerAccount>,
     on_test_server: EventHandler<ServerAccount>,
 ) -> Element {
+    let lang = use_context::<Signal<Language>>()();
+    let tr = I18n::new(lang);
+
     let mut delete_target = use_signal(|| None::<ServerAccount>);
 
     if servers.is_empty() {
         return rsx! {
-            div { class: "page-header", h1 { class: "page-title", "服务器" } }
+            div { class: "page-header", h1 { class: "page-title", "{tr.servers_title()}" } }
             div { class: "empty-state",
                 div { class: "empty-icon", IconDns {} }
-                div { class: "empty-title", "暂无服务器" }
-                div { class: "empty-desc", "添加一个 WebDAV 服务器后，点击服务器即可进入文件列表。" }
+                div { class: "empty-title", "{tr.servers_empty_title()}" }
+                div { class: "empty-desc", "{tr.servers_empty_desc()}" }
                 button {
                     class: "btn-add-server",
                     onclick: move |_| on_add_server.call(()),
                     IconPlus {}
-                    "添加服务器"
+                    "{tr.add_server()}"
                 }
             }
         };
@@ -37,14 +41,14 @@ pub fn ServersPage(
 
     rsx! {
         div { class: "page-header",
-            h1 { class: "page-title", "服务器" }
+            h1 { class: "page-title", "{tr.servers_title()}" }
             button {
                 class: "header-icon-btn",
                 style: "background: var(--app-primary); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;",
-                title: "添加服务器",
+                title: "{tr.add_server()}",
                 onclick: move |_| on_add_server.call(()),
                 IconPlus {}
-                span { "添加" }
+                span { "{tr.add()}" }
             }
         }
 
@@ -67,10 +71,10 @@ pub fn ServersPage(
                     };
 
                     let status_text = if is_testing {
-                        "测试中...".to_string()
+                        tr.status_testing().to_string()
                     } else if let Some(ok) = test_status {
-                        if ok { format!("{} · 连接成功", srv.auth_type.label()) }
-                        else { format!("{} · 连接失败", srv.auth_type.label()) }
+                        if ok { format!("{} · {}", srv.auth_type.label(), tr.status_connected()) }
+                        else { format!("{} · {}", srv.auth_type.label(), tr.status_failed()) }
                     } else {
                         srv.auth_type.label().to_string()
                     };
@@ -89,7 +93,7 @@ pub fn ServersPage(
                                 div { class: "server-card-header-actions",
                                     button {
                                         class: "header-icon-btn",
-                                        title: "服务器二维码",
+                                        title: "{tr.server_qr_code()}",
                                         onclick: move |e| { e.stop_propagation(); },
                                         IconQr {}
                                     }
@@ -113,20 +117,20 @@ pub fn ServersPage(
                                     onclick: move |e| e.stop_propagation(),
                                     button {
                                         class: "tool-btn",
-                                        title: "测试连接",
+                                        title: "{tr.test_connection()}",
                                         disabled: is_testing,
                                         onclick: move |_| on_test_server.call(srv_for_test.clone()),
                                         IconWifi {}
                                     }
                                     button {
                                         class: "tool-btn",
-                                        title: "编辑服务器",
+                                        title: "{tr.edit_server()}",
                                         onclick: move |_| on_edit_server.call(srv_for_edit.clone()),
                                         IconPencil {}
                                     }
                                     button {
                                         class: "tool-btn danger",
-                                        title: "删除服务器",
+                                        title: "{tr.delete_server()}",
                                         onclick: move |_| delete_target.set(Some(srv_for_delete.clone())),
                                         IconTrash {}
                                     }
@@ -142,7 +146,7 @@ pub fn ServersPage(
                 class: "btn-add-server",
                 onclick: move |_| on_add_server.call(()),
                 IconPlus {}
-                "添加服务器"
+                "{tr.add_server()}"
             }
         }
 
@@ -152,17 +156,17 @@ pub fn ServersPage(
                 onclick: move |_| delete_target.set(None),
                 div { class: "modal-dialog",
                     onclick: move |e| e.stop_propagation(),
-                    div { class: "modal-header", "删除服务器" }
+                    div { class: "modal-header", "{tr.delete_server_confirm_title()}" }
                     div { class: "modal-body",
                         p { style: "font-size: 14px; color: #111; line-height: 1.6;",
-                            "确定要删除服务器 \"{target.name}\" 吗？该服务器的连接地址与登录凭据将被移除。"
+                            "{tr.delete_server_confirm_desc(&target.name)}"
                         }
                     }
                     div { class: "modal-footer",
                         button {
                             class: "btn-secondary",
                             onclick: move |_| delete_target.set(None),
-                            "取消"
+                            "{tr.cancel()}"
                         }
                         button {
                             class: "btn-primary",
@@ -171,7 +175,7 @@ pub fn ServersPage(
                                 on_delete_server.call(target.clone());
                                 delete_target.set(None);
                             },
-                            "删除"
+                            "{tr.delete()}"
                         }
                     }
                 }
@@ -179,4 +183,3 @@ pub fn ServersPage(
         }
     }
 }
-

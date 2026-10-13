@@ -3,6 +3,7 @@ use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
 
 mod components;
+mod i18n;
 mod models;
 mod webdav;
 
@@ -12,10 +13,11 @@ use components::server_modal::ServerModal;
 use components::servers_page::ServersPage;
 use components::settings_page::SettingsPage;
 use components::sidebar::Sidebar;
+use i18n::I18n;
 
 use models::{
-    AuthType, NavTab, ServerAccount, ACTIVE_SERVER_ID_KEY, LEGACY_CONNECTION_KEY,
-    SERVERS_STORAGE_KEY,
+    AuthType, Language, NavTab, ServerAccount, ACTIVE_SERVER_ID_KEY, LANGUAGE_STORAGE_KEY,
+    LEGACY_CONNECTION_KEY, SERVERS_STORAGE_KEY,
 };
 use webdav::test_server_connection;
 
@@ -25,6 +27,9 @@ fn main() {
 
 #[component]
 fn App() -> Element {
+    let lang = use_signal(load_initial_language);
+    provide_context(lang);
+
     let mut servers = use_signal(load_initial_servers);
     let mut active_server = use_signal(|| -> Option<ServerAccount> {
         let list = servers();
@@ -85,8 +90,8 @@ fn App() -> Element {
             test_results.write().insert(id.clone(), ok);
             testing_server_id.set(None);
             match res {
-                Ok(()) => show_toast_test(format!("服务器 \"{}\" 连接成功", srv.name), false),
-                Err(err) => show_toast_test(format!("连接失败: {err}"), true),
+                Ok(()) => show_toast_test(I18n::new(lang()).toast_server_connected(&srv.name), false),
+                Err(err) => show_toast_test(I18n::new(lang()).toast_conn_failed(&err), true),
             }
         });
     };
@@ -102,7 +107,7 @@ fn App() -> Element {
         let _ = LocalStorage::set(SERVERS_STORAGE_KEY, &list);
         servers.set(list);
         modal_server.set(None);
-        show_toast_save(format!("服务器 \"{}\" 保存成功", updated_srv.name), false);
+        show_toast_save(I18n::new(lang()).toast_server_saved(&updated_srv.name), false);
     };
 
     let mut show_toast_del = show_toast;
@@ -115,7 +120,7 @@ fn App() -> Element {
             active_server.set(None);
             let _ = LocalStorage::delete(ACTIVE_SERVER_ID_KEY);
         }
-        show_toast_del(format!("已删除服务器 \"{}\"", srv.name), false);
+        show_toast_del(I18n::new(lang()).toast_server_deleted(&srv.name), false);
     };
 
     rsx! {
@@ -171,7 +176,7 @@ fn App() -> Element {
                                 on_clear_cache: move |_| {
                                     servers.set(Vec::new());
                                     active_server.set(None);
-                                    show_toast("已清除所有本地数据与缓存".into(), false);
+                                    show_toast(I18n::new(lang()).toast_data_cleared().into(), false);
                                 },
                                 on_open_pwa_guide: move |_| pwa_guide_open.set(true),
                             }
@@ -211,9 +216,7 @@ fn App() -> Element {
 
 fn load_initial_servers() -> Vec<ServerAccount> {
     if let Ok(saved) = LocalStorage::get::<Vec<ServerAccount>>(SERVERS_STORAGE_KEY) {
-        if !saved.is_empty() {
-            return saved;
-        }
+        return saved;
     }
 
     // Try migrating legacy single connection
@@ -248,18 +251,24 @@ fn load_initial_servers() -> Vec<ServerAccount> {
         }
     }
 
-    // Default preset
-    let defaults = vec![ServerAccount {
-        id: "srv_default".into(),
-        name: "Default".into(),
-        base_url: "http://127.0.0.1:8080/dav/".into(),
-        auth_type: AuthType::Basic,
-        username: String::new(),
-        password: String::new(),
-        token: String::new(),
-        allow_http: true,
-        trust_self_signed_cert: false,
-    }];
-    let _ = LocalStorage::set(SERVERS_STORAGE_KEY, &defaults);
-    defaults
+    Vec::new()
+}
+
+fn load_initial_language() -> Language {
+    if let Ok(saved) = LocalStorage::get::<Language>(LANGUAGE_STORAGE_KEY) {
+        return saved;
+    }
+
+    if let Some(w) = web_sys::window() {
+        if let Some(lang_str) = w.navigator().language() {
+            let lower = lang_str.to_lowercase();
+            if lower.starts_with("zh") {
+                return Language::Zh;
+            } else {
+                return Language::En;
+            }
+        }
+    }
+
+    Language::Zh
 }

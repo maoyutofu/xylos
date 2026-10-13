@@ -1,3 +1,5 @@
+use crate::i18n::I18n;
+use crate::models::Language;
 use dioxus::prelude::*;
 
 pub fn is_standalone_mode() -> bool {
@@ -57,6 +59,9 @@ pub fn is_mobile_device() -> bool {
 
 #[component]
 pub fn PwaInstallBanner(on_open_guide: EventHandler<()>) -> Element {
+    let lang = use_context::<Signal<Language>>()();
+    let tr = I18n::new(lang);
+
     let mut dismissed = use_signal(|| false);
     let is_standalone = use_signal(is_standalone_mode);
     let is_mobile = use_signal(is_mobile_device);
@@ -73,17 +78,17 @@ pub fn PwaInstallBanner(on_open_guide: EventHandler<()>) -> Element {
                     src: "/app/assets/icon.svg",
                     alt: "Xylos",
                 }
-                span { class: "pwa-banner-text", "安装 Xylos 到手机主屏幕，享受全屏原生客户端体验" }
+                span { class: "pwa-banner-text", "{tr.pwa_banner_text()}" }
             }
             div { class: "pwa-banner-actions",
                 button {
                     class: "pwa-btn-install",
                     onclick: move |_| on_open_guide.call(()),
-                    "安装指引"
+                    "{tr.pwa_banner_btn()}"
                 }
                 button {
                     class: "pwa-btn-dismiss",
-                    title: "暂不安装",
+                    title: "{tr.pwa_banner_dismiss()}",
                     onclick: move |_| dismissed.set(true),
                     "×"
                 }
@@ -94,6 +99,8 @@ pub fn PwaInstallBanner(on_open_guide: EventHandler<()>) -> Element {
 
 #[component]
 pub fn PwaGuideModal(on_close: EventHandler<()>) -> Element {
+    let lang = use_context::<Signal<Language>>()();
+    let tr = I18n::new(lang);
     let is_ios = is_ios_device();
 
     rsx! {
@@ -103,58 +110,58 @@ pub fn PwaGuideModal(on_close: EventHandler<()>) -> Element {
                 class: "modal-dialog",
                 style: "max-width: 440px;",
                 onclick: move |e| e.stop_propagation(),
-                div { class: "modal-header", "添加到手机主屏幕 (PWA)" }
+                div { class: "modal-header", "{tr.pwa_guide_title()}" }
                 div { class: "modal-body",
                     p { style: "font-size: 13px; color: #475569; line-height: 1.6;",
-                        "将 Xylos 安装到手机主屏幕后，将移除浏览器地址栏与底部工具栏，提供独立应用的高性能全屏体验。"
+                        "{tr.pwa_guide_desc()}"
                     }
                     div { class: "pwa-guide-steps",
                         if is_ios {
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "1" }
                                 div { class: "pwa-step-desc",
-                                    "点击 Safari 浏览器底部的 "
-                                    strong { "「分享」按钮" }
-                                    " (方框带向上箭头图标 ⎋)"
+                                    "{tr.pwa_ios_step1_prefix()}"
+                                    strong { "{tr.pwa_ios_step1_strong()}" }
+                                    "{tr.pwa_ios_step1_suffix()}"
                                 }
                             }
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "2" }
                                 div { class: "pwa-step-desc",
-                                    "在弹出菜单中向下滑动，找到并点击 "
-                                    strong { "「添加到主屏幕」" }
-                                    " (Add to Home Screen)"
+                                    "{tr.pwa_ios_step2_prefix()}"
+                                    strong { "{tr.pwa_ios_step2_strong()}" }
+                                    "{tr.pwa_ios_step2_suffix()}"
                                 }
                             }
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "3" }
                                 div { class: "pwa-step-desc",
-                                    "点击右上角 "
-                                    strong { "「添加」" }
-                                    "。返回手机桌面点击 Xylos 图标，即可开启全屏无地址栏体验！"
+                                    "{tr.pwa_ios_step3_prefix()}"
+                                    strong { "{tr.pwa_ios_step3_strong()}" }
+                                    "{tr.pwa_ios_step3_suffix()}"
                                 }
                             }
                         } else {
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "1" }
                                 div { class: "pwa-step-desc",
-                                    "点击浏览器右上角菜单图标 "
-                                    strong { "「···」" }
+                                    "{tr.pwa_other_step1_prefix()}"
+                                    strong { "{tr.pwa_other_step1_strong()}" }
                                 }
                             }
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "2" }
                                 div { class: "pwa-step-desc",
-                                    "在菜单列表中选择 "
-                                    strong { "「安装应用」" }
-                                    " 或 "
-                                    strong { "「添加至主屏幕」" }
+                                    "{tr.pwa_other_step2_prefix()}"
+                                    strong { "{tr.pwa_other_step2_install()}" }
+                                    "{tr.pwa_other_step2_or()}"
+                                    strong { "{tr.pwa_other_step2_homescreen()}" }
                                 }
                             }
                             div { class: "pwa-step-item",
                                 div { class: "pwa-step-badge", "3" }
                                 div { class: "pwa-step-desc",
-                                    "确认添加后，从桌面图标直接启动应用，享受全屏原生体验。"
+                                    "{tr.pwa_other_step3()}"
                                 }
                             }
                         }
@@ -164,7 +171,7 @@ pub fn PwaGuideModal(on_close: EventHandler<()>) -> Element {
                     button {
                         class: "btn-primary",
                         onclick: move |_| on_close.call(()),
-                        "我知道了"
+                        "{tr.understood()}"
                     }
                 }
             }
