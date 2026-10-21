@@ -15,7 +15,7 @@ pub fn ServerModal(
     let initial = server.clone().unwrap_or_else(|| ServerAccount {
         id: format!("srv_{}", js_sys::Date::now() as u64),
         name: String::new(),
-        base_url: "http://127.0.0.1:8080/dav/".into(),
+        base_url: String::new(),
         auth_type: AuthType::Basic,
         username: String::new(),
         password: String::new(),

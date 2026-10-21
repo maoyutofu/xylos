@@ -76,7 +76,7 @@ pub fn PwaInstallBanner(on_open_guide: EventHandler<()>) -> Element {
                 img {
                     class: "pwa-banner-icon",
                     src: "/app/assets/icon.svg",
-                    alt: "Xylos",
+                    alt: "Xylos light",
                 }
                 span { class: "pwa-banner-text", "{tr.pwa_banner_text()}" }
             }

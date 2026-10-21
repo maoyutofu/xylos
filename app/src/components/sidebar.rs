@@ -17,7 +17,7 @@ pub fn Sidebar(current_tab: NavTab, on_select_tab: EventHandler<NavTab>) -> Elem
                 img {
                     class: "sidebar-logo",
                     src: "/app/assets/icon.svg",
-                    alt: "Xylos",
+                    alt: "Xylos light",
                 }
             }
             button {

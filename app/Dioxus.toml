@@ -4,7 +4,7 @@ default_platform = "web"
 asset_dir = "public"
 
 [web.app]
-title = "Xylos WebDAV"
+title = "Xylos light"
 base_path = "/app/"
 
 [web.resource]

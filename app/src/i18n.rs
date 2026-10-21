@@ -209,14 +209,14 @@ impl I18n {
     }
 
     pub fn settings_about_title(&self) -> &'static str {
-        if self.is_zh() { "关于 Xylos" } else { "About Xylos" }
+        if self.is_zh() { "关于 Xylos light" } else { "About Xylos light" }
     }
 
     pub fn settings_about_desc(&self) -> &'static str {
         if self.is_zh() {
-            "Xylos WebDAV Client 是一个基于 Rust + Dioxus 构建的跨平台客户端应用。支持多 WebDAV 服务器管理、离线浏览与 PWA 安装。"
+            "Xylos light WebDAV Client 是一个基于 Rust + Dioxus 构建的跨平台客户端应用。支持多 WebDAV 服务器管理、离线浏览与 PWA 安装。"
         } else {
-            "Xylos WebDAV Client is a cross-platform client application built with Rust + Dioxus, supporting multi-server WebDAV management, offline browsing, and PWA installation."
+            "Xylos light WebDAV Client is a cross-platform client application built with Rust + Dioxus, supporting multi-server WebDAV management, offline browsing, and PWA installation."
         }
     }
 
@@ -472,9 +472,9 @@ impl I18n {
     // PWA Guide
     pub fn pwa_banner_text(&self) -> &'static str {
         if self.is_zh() {
-            "安装 Xylos 到手机主屏幕，享受全屏原生客户端体验"
+            "安装 Xylos light 到手机主屏幕，享受全屏原生客户端体验"
         } else {
-            "Install Xylos to your home screen for a fullscreen native experience"
+            "Install Xylos light to your home screen for a fullscreen native experience"
         }
     }
 
@@ -492,9 +492,9 @@ impl I18n {
 
     pub fn pwa_guide_desc(&self) -> &'static str {
         if self.is_zh() {
-            "将 Xylos 安装到手机主屏幕后，将移除浏览器地址栏与底部工具栏，提供独立应用的高性能全屏体验。"
+            "将 Xylos light 安装到手机主屏幕后，将移除浏览器地址栏与底部工具栏，提供独立应用的高性能全屏体验。"
         } else {
-            "Installing Xylos to your home screen removes the browser address bar and toolbars, offering a fullscreen native app experience."
+            "Installing Xylos light to your home screen removes the browser address bar and toolbars, offering a fullscreen native app experience."
         }
     }
 
@@ -532,9 +532,9 @@ impl I18n {
 
     pub fn pwa_ios_step3_suffix(&self) -> &'static str {
         if self.is_zh() {
-            "。返回手机桌面点击 Xylos 图标，即可开启全屏无地址栏体验！"
+            "。返回手机桌面点击 Xylos light 图标，即可开启全屏无地址栏体验！"
         } else {
-            " in the top right. Launch from home screen for fullscreen experience!"
+            " in the top right. Launch Xylos light from home screen for fullscreen experience!"
         }
     }
 
