@@ -93,7 +93,6 @@ pub fn ServerModal(
                         label { class: "form-label", "{tr.field_server_url()}" }
                         input {
                             class: "form-input",
-                            placeholder: "http://192.168.0.26:8080/dav/",
                             value: "{base_url()}",
                             oninput: move |e| base_url.set(e.value()),
                         }
