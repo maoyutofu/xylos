@@ -1,6 +1,7 @@
+use crate::components::file_preview::FilePreviewModal;
 use crate::components::icons::{
-    IconArrowBack, IconDownload, IconFile, IconFolder, IconGrid, IconImage, IconList, IconMore,
-    IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
+    IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconImage, IconList,
+    IconMore, IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
 };
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
@@ -46,6 +47,7 @@ pub fn FileBrowser(
     let mut rename_target = use_signal(|| None::<Entry>);
     let mut rename_name = use_signal(String::new);
     let mut delete_target = use_signal(|| None::<Entry>);
+    let mut preview_target = use_signal(|| None::<Entry>);
 
     let load_dir = move |path: String| {
         let mut menu_sig = active_menu;
@@ -112,6 +114,11 @@ pub fn FileBrowser(
                 Err(err) => on_error.call(err),
             }
         });
+    };
+
+    let mut handle_preview = move |entry: Entry| {
+        active_menu.set(None);
+        preview_target.set(Some(entry));
     };
 
     let handle_create_folder = move || {
@@ -300,6 +307,7 @@ pub fn FileBrowser(
                     for item in sorted_entries.into_iter() {
                         {
                             let item_click = item.clone();
+                            let item_preview = item.clone();
                             let item_download = item.clone();
                             let item_rename = item.clone();
                             let item_delete = item.clone();
@@ -334,7 +342,7 @@ pub fn FileBrowser(
                                         } else if is_dir {
                                             load_dir(href.clone());
                                         } else {
-                                            handle_download(item_click.clone());
+                                            handle_preview(item_click.clone());
                                         }
                                     },
                                     div {
@@ -370,6 +378,14 @@ pub fn FileBrowser(
                                                 class: "file-popover-menu",
                                                 onclick: move |e| e.stop_propagation(),
                                                 if !is_dir {
+                                                    button {
+                                                        class: "popover-item",
+                                                        onclick: move |_| {
+                                                            handle_preview(item_preview.clone());
+                                                        },
+                                                        IconEye {}
+                                                        span { "{tr.menu_preview()}" }
+                                                    }
                                                     button {
                                                         class: "popover-item",
                                                         onclick: move |_| {
@@ -427,7 +443,7 @@ pub fn FileBrowser(
                                         if is_dir {
                                             load_dir(href.clone());
                                         } else {
-                                            handle_download(item_click.clone());
+                                            handle_preview(item_click.clone());
                                         }
                                     },
                                     div {
@@ -569,6 +585,17 @@ pub fn FileBrowser(
                             }
                         }
                     }
+                }
+            }
+
+            // File Preview Modal
+            if let Some(target) = preview_target() {
+                FilePreviewModal {
+                    key: "{target.href}",
+                    server: server_sig(),
+                    entry: target,
+                    on_close: move |_| preview_target.set(None),
+                    on_download: move |entry| handle_download(entry),
                 }
             }
 

@@ -1407,3 +1407,236 @@ button, input, select {
   }
 }
 
+
+/* File Preview */
+.preview-backdrop {
+  z-index: 1100;
+  padding: 24px;
+  align-items: center;
+}
+
+.preview-dialog {
+  width: min(1120px, 96vw);
+  height: min(860px, 90dvh);
+  max-width: 1120px;
+  max-height: 90dvh;
+  background: var(--app-surface);
+  border: 1px solid var(--app-module-border);
+  border-radius: 14px;
+  box-shadow: var(--app-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalEnter 0.15s ease-out;
+}
+
+.preview-header {
+  min-height: 64px;
+  padding: 12px 14px 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0;
+}
+
+.preview-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.preview-filename {
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-meta {
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.preview-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.preview-action-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preview-action-btn:hover {
+  background: var(--app-hover-surface);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.preview-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(45deg, var(--app-subtle-surface) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--app-subtle-surface) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--app-subtle-surface) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--app-subtle-surface) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-color: var(--app-surface);
+}
+
+.preview-image,
+.preview-video {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.preview-pdf {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: 0;
+  background: #ffffff;
+}
+
+.preview-audio-wrap {
+  width: min(460px, 88%);
+  padding: 36px 28px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.preview-audio {
+  width: 100%;
+}
+
+.preview-file-icon {
+  color: var(--app-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-text {
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+  margin: 0;
+  padding: 24px;
+  overflow: auto;
+  background: var(--app-surface);
+  color: var(--app-text);
+  font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.preview-status {
+  width: min(520px, 88%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+}
+
+.preview-fallback {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  box-shadow: var(--app-shadow-md);
+}
+
+.preview-status-title {
+  color: var(--app-text);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.preview-status-desc {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.preview-download-button {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.preview-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--app-border);
+  border-top-color: var(--app-primary);
+  border-radius: 50%;
+  animation: previewSpin 0.8s linear infinite;
+}
+
+@keyframes previewSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 720px) {
+  .preview-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .preview-dialog {
+    width: 100%;
+    height: 100dvh;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .preview-header {
+    min-height: calc(58px + env(safe-area-inset-top, 0px));
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 10px 16px;
+  }
+
+  .preview-pdf {
+    min-height: 0;
+  }
+
+  .preview-text {
+    padding: 16px;
+    font-size: 12px;
+  }
+}

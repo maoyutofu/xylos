@@ -33,6 +33,8 @@ struct Prop {
     modified: Option<String>,
     #[serde(rename = "getetag")]
     etag: Option<String>,
+    #[serde(rename = "getcontenttype")]
+    content_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -136,6 +138,7 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
                 size: prop.content_length,
                 modified: prop.modified.unwrap_or_default(),
                 etag: prop.etag,
+                content_type: prop.content_type,
             })
         })
         .collect();

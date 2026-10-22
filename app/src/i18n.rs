@@ -369,6 +369,64 @@ impl I18n {
         if self.is_zh() { "下载" } else { "Download" }
     }
 
+    pub fn menu_preview(&self) -> &'static str {
+        if self.is_zh() { "预览" } else { "Preview" }
+    }
+
+    pub fn preview_loading(&self) -> &'static str {
+        if self.is_zh() { "正在加载预览..." } else { "Loading preview..." }
+    }
+
+    pub fn preview_unsupported_title(&self) -> &'static str {
+        if self.is_zh() { "此文件暂不支持预览" } else { "Preview is not available for this file" }
+    }
+
+    pub fn preview_unsupported_desc(&self, extension: &str) -> String {
+        if self.is_zh() {
+            if extension.is_empty() {
+                "浏览器无法直接显示这种文件类型的格式。请下载后使用本地应用打开。".into()
+            } else {
+                format!(".{extension} 文件无法在浏览器中安全预览。请下载后使用本地应用打开。")
+            }
+        } else if extension.is_empty() {
+            "This file format cannot be displayed safely in the browser. Download it and open it with a local app.".into()
+        } else {
+            format!(".{extension} files cannot be previewed safely in the browser. Download the file and open it with a local app.")
+        }
+    }
+
+    pub fn preview_too_large_title(&self) -> &'static str {
+        if self.is_zh() { "文件过大，未加载预览" } else { "File is too large to preview" }
+    }
+
+    pub fn preview_too_large_desc(&self, limit: &str) -> String {
+        if self.is_zh() {
+            format!("为保证应用流畅运行，超过 {limit} 的文件不会自动加载。请下载后查看。")
+        } else {
+            format!("To keep the app responsive, files larger than {limit} are not loaded automatically. Download the file to view it.")
+        }
+    }
+
+    pub fn preview_error_title(&self) -> &'static str {
+        if self.is_zh() { "预览加载失败" } else { "Failed to load preview" }
+    }
+
+    pub fn preview_error_desc(&self) -> &'static str {
+        if self.is_zh() {
+            "文件可能已损坏、网络连接中断，或浏览器不支持此格式。您仍可以尝试下载。"
+        } else {
+            "The file may be damaged, the connection was interrupted, or the browser does not support this format. You can still download it."
+        }
+    }
+
+    pub fn preview_download_file(&self) -> &'static str {
+        if self.is_zh() { "下载文件" } else { "Download File" }
+    }
+
+    pub fn tooltip_close_preview(&self) -> &'static str {
+        if self.is_zh() { "关闭预览" } else { "Close Preview" }
+    }
+
     pub fn menu_rename(&self) -> &'static str {
         if self.is_zh() { "重命名" } else { "Rename" }
     }

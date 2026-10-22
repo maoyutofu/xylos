@@ -99,6 +99,8 @@ pub struct Entry {
     pub size: Option<u64>,
     pub modified: String,
     pub etag: Option<String>,
+    #[serde(default)]
+    pub content_type: Option<String>,
 }
 
 #[allow(dead_code)]
