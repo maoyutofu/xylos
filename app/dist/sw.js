@@ -1,1 +1,39 @@
-const CACHE="xylos-webdav-shell-v3",SHELL=["/app/","/app/index.html","/app/manifest.webmanifest"];self.addEventListener("install",t=>{t.waitUntil(caches.open(CACHE).then(a=>a.addAll(SHELL)).catch(()=>{})),self.skipWaiting()}),self.addEventListener("activate",t=>{t.waitUntil(caches.keys().then(a=>Promise.all(a.filter(e=>e!==CACHE).map(e=>caches.delete(e))))),self.clients.claim()}),self.addEventListener("fetch",t=>{const a=new URL(t.request.url);a.origin!==self.location.origin||!a.pathname.startsWith("/app/")||t.respondWith(fetch(t.request).then(e=>{if(e&&e.status===200&&t.request.method==="GET"){const s=e.clone();caches.open(CACHE).then(c=>c.put(t.request,s))}return e}).catch(()=>caches.match(t.request).then(e=>e||caches.match("/app/"))))});
+const CACHE = "xylos-webdav-shell-v4";
+const SHELL = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => {})
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || !url.pathname.startsWith("/app/")) return;
+
+  // Network-First strategy: always fetch latest when online, fallback to cache when offline
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200 && event.request.method === "GET") {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cached) => cached || caches.match("/app/"));
+      })
+  );
+});
+

@@ -1,4 +1,4 @@
-const CACHE = "xylos-webdav-shell-v3";
+const CACHE = "xylos-webdav-shell-v4";
 const SHELL = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

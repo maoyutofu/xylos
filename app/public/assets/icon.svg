@@ -5,7 +5,7 @@
       <stop offset="100%" stop-color="#4c6ef5"/>
     </linearGradient>
   </defs>
-  <rect width="1254" height="1254" rx="282" ry="282" fill="url(#xylosBrandGrad)"/>
+  <rect width="1254" height="1254" fill="url(#xylosBrandGrad)"/>
 <path fill="#FEFDFE" opacity="1.000000" stroke="none" 
 	d="
 M711.455566,921.682983 
