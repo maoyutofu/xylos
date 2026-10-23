@@ -6,17 +6,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use axum::Router;
 use axum::body::Body;
 use axum::body::to_bytes;
-use axum::extract::{Request, State};
+use axum::extract::{Query, Request, State};
 use axum::http::header::{
-    ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName, LAST_MODIFIED,
-    WWW_AUTHENTICATE,
+    ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName, IF_NONE_MATCH,
+    LAST_MODIFIED, VARY, WWW_AUTHENTICATE,
 };
 
 use axum::http::{HeaderValue, Response, StatusCode};
-use axum::routing::any;
+use axum::routing::{any, get};
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::StreamExt;
 use percent_encoding::{AsciiSet, CONTROLS};
+use serde::Deserialize;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::time::Duration;
@@ -33,6 +34,7 @@ use crate::fs::{
 use crate::lock::{LockStore, submitted_lock_tokens, timeout_from_header};
 use crate::permission::required_permission;
 use crate::prop::{DeadProperty, PropStore, parse_proppatch};
+use crate::thumbnail::{ThumbnailError, ThumbnailService};
 
 const MAX_PROPPATCH_BYTES: usize = 1024 * 1024;
 static NEXT_UPLOAD_ID: AtomicU64 = AtomicU64::new(1);
@@ -59,15 +61,47 @@ struct AppState {
     nonce_store: Arc<NonceStore>,
     lock_store: Arc<LockStore>,
     prop_store: Arc<PropStore>,
+    thumbnails: Arc<ThumbnailService>,
     allowed_methods: HeaderValue,
 }
 
 pub async fn serve(config: AppConfig) -> Result<(), AppError> {
     prepare_roots(&config).await?;
 
+    let protected_roots = config
+        .users
+        .iter()
+        .filter(|user| user.enabled)
+        .map(|user| {
+            std::fs::canonicalize(&user.root_dir).map_err(|source| AppError::RootDirCanonicalize {
+                path: user.root_dir.display().to_string(),
+                source,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let thumbnail_service = Arc::new(ThumbnailService::new(
+        config.thumbnails.clone(),
+        config.config_dir.clone(),
+        protected_roots,
+    ));
+    if thumbnail_service.enabled() {
+        for user in config.users.iter().filter(|user| user.enabled) {
+            if let Err(error) = thumbnail_service.prepare_root(&user.root_dir).await {
+                warn!(
+                    user = %user.username,
+                    root = %user.root_dir.display(),
+                    error = %error,
+                    "server thumbnails disabled for user root"
+                );
+            }
+        }
+        thumbnail_service.start_cleanup_task();
+    }
+
     let addr = socket_addr(&config)?;
     let tls = config.server.tls.clone().filter(|tls| tls.enabled);
-    let app = app(config);
+    let app = app(config, thumbnail_service);
 
     if let Some(tls) = tls {
         let cert_path = tls.cert_path.as_ref().expect("TLS cert path validated");
@@ -88,17 +122,19 @@ pub async fn serve(config: AppConfig) -> Result<(), AppError> {
     Ok(())
 }
 
-fn app(config: AppConfig) -> Router {
+fn app(config: AppConfig, thumbnails: Arc<ThumbnailService>) -> Router {
     let allowed_methods = allowed_methods(&config);
     let state = AppState {
         nonce_store: Arc::new(NonceStore::new(config.auth.nonce_ttl_secs)),
         lock_store: Arc::new(LockStore::new()),
         prop_store: Arc::new(PropStore::new()),
+        thumbnails,
         config: Arc::new(config),
         allowed_methods,
     };
 
     let app = Router::new()
+        .route("/_xylos/thumbnail", get(thumbnail_response))
         .nest_service(
             "/app",
             ServeDir::new("app/dist").append_index_html_on_directories(true),
@@ -131,8 +167,132 @@ async fn app_cache_control(req: Request, next: axum::middleware::Next) -> Respon
     res
 }
 
+#[derive(Debug, Deserialize)]
+struct ThumbnailQuery {
+    path: String,
+    w: Option<u32>,
+}
 
+async fn thumbnail_response(
+    State(state): State<AppState>,
+    Query(query): Query<ThumbnailQuery>,
+    request: Request,
+) -> Response<Body> {
+    let method_name = "GET";
+    let request_uri = request
+        .uri()
+        .path_and_query()
+        .map(|path_and_query| path_and_query.as_str().to_owned())
+        .unwrap_or_else(|| request.uri().path().to_owned());
 
+    let principal = match authenticate(
+        &state.config,
+        request.headers(),
+        method_name,
+        &request_uri,
+        &state.nonce_store,
+    ) {
+        Ok(principal) => principal,
+        Err(_) => {
+            return unauthorized_response(www_authenticate_values(
+                &state.config,
+                &state.nonce_store,
+            ));
+        }
+    };
+
+    if !principal
+        .permissions
+        .contains(&crate::config::Permission::Read)
+    {
+        return empty_response(StatusCode::FORBIDDEN);
+    }
+
+    if !state.thumbnails.enabled() {
+        return empty_response(StatusCode::NOT_IMPLEMENTED);
+    }
+
+    let dav_path = match resolve_dav_path_with_root(&state.config, &principal.root_dir, &query.path)
+    {
+        Ok(path) => path,
+        Err(PathError::OutsideBasePath) => return empty_response(StatusCode::NOT_FOUND),
+        Err(PathError::InvalidEncoding | PathError::UnsafePath) => {
+            return empty_response(StatusCode::BAD_REQUEST);
+        }
+    };
+    let source = match canonicalize_existing_under_root(&principal.root_dir, &dav_path.fs_path) {
+        Ok(path) => path,
+        Err(CanonicalPathError::Path(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return empty_response(StatusCode::NOT_FOUND);
+        }
+        Err(CanonicalPathError::OutsideRoot) => return empty_response(StatusCode::FORBIDDEN),
+        Err(_) => return empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let cache = match state.thumbnails.root_cache(&principal.root_dir).await {
+        Ok(cache) => cache,
+        Err(ThumbnailError::Disabled) => return empty_response(StatusCode::NOT_IMPLEMENTED),
+        Err(error) => {
+            warn!(error = %error, "failed to resolve thumbnail cache");
+            return empty_response(StatusCode::SERVICE_UNAVAILABLE);
+        }
+    };
+
+    let output = match state
+        .thumbnails
+        .load_or_generate(
+            &cache,
+            &principal.username,
+            &dav_path.href_path,
+            &source,
+            query.w,
+        )
+        .await
+    {
+        Ok(output) => output,
+        Err(error) => return thumbnail_error_response(error),
+    };
+
+    let response_etag = HeaderValue::from_str(&output.etag)
+        .unwrap_or_else(|_| HeaderValue::from_static("\"thumbnail\""));
+    if request
+        .headers()
+        .get(IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|etag| etag == output.etag)
+    {
+        return Response::builder()
+            .status(StatusCode::NOT_MODIFIED)
+            .header(ETAG, response_etag)
+            .header(CACHE_CONTROL, "private, max-age=86400")
+            .body(Body::empty())
+            .expect("304 response should be valid");
+    }
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "image/webp")
+        .header(CONTENT_LENGTH, output.bytes.len().to_string())
+        .header(ETAG, response_etag)
+        .header(CACHE_CONTROL, "private, max-age=86400")
+        .header(VARY, "Authorization")
+        .body(Body::from(output.bytes))
+        .expect("thumbnail response should be valid")
+}
+
+fn thumbnail_error_response(error: ThumbnailError) -> Response<Body> {
+    match error {
+        ThumbnailError::Disabled => empty_response(StatusCode::NOT_IMPLEMENTED),
+        ThumbnailError::Unsupported => empty_response(StatusCode::UNSUPPORTED_MEDIA_TYPE),
+        ThumbnailError::TooLarge => empty_response(StatusCode::PAYLOAD_TOO_LARGE),
+        ThumbnailError::NotFound => empty_response(StatusCode::NOT_FOUND),
+        ThumbnailError::Busy => empty_response(StatusCode::SERVICE_UNAVAILABLE),
+        ThumbnailError::Io(error) | ThumbnailError::Decode(error) => {
+            warn!(error = %error, "thumbnail request failed");
+            empty_response(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
 
 async fn handle_request(State(state): State<AppState>, request: Request) -> Response<Body> {
     let method_name = request.method().as_str().to_owned();
@@ -238,6 +398,14 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
         .get(&DESTINATION)
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned);
+    let prewarm_destination = if matches!(method, DavMethod::Copy | DavMethod::Move) {
+        destination.as_deref().and_then(|destination| {
+            let destination_path = destination_path_from_header(destination);
+            resolve_dav_path_with_root(&state.config, &effective_root, &destination_path).ok()
+        })
+    } else {
+        None
+    };
     let lock_tokens = submitted_lock_tokens(request.headers());
     let timeout = timeout_from_header(
         request
@@ -301,7 +469,7 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
                 &state.lock_store,
                 &dav_path.fs_path,
                 &scoped_href,
-                destination,
+                destination.clone(),
                 &lock_tokens,
                 overwrite,
                 false,
@@ -315,7 +483,7 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
                 &state.lock_store,
                 &dav_path.fs_path,
                 &scoped_href,
-                destination,
+                destination.clone(),
                 &lock_tokens,
                 overwrite,
                 true,
@@ -355,6 +523,30 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
         }
     };
 
+    if response.status().is_success() {
+        match method {
+            DavMethod::Put if state.config.thumbnails.prewarm_on_upload => {
+                state.thumbnails.prewarm(
+                    effective_root.clone(),
+                    principal.username.clone(),
+                    dav_path.href_path.clone(),
+                    dav_path.fs_path.clone(),
+                );
+            }
+            DavMethod::Copy | DavMethod::Move => {
+                if let Some(destination) = prewarm_destination {
+                    state.thumbnails.prewarm(
+                        effective_root.clone(),
+                        principal.username.clone(),
+                        destination.href_path,
+                        destination.fs_path,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
     let reason = default_reason_for_status(method, response.status());
     finish_request(
         response,
@@ -363,6 +555,14 @@ async fn handle_request(State(state): State<AppState>, request: Request) -> Resp
         username.as_deref(),
         reason,
     )
+}
+
+fn destination_path_from_header(destination: &str) -> String {
+    destination
+        .parse::<axum::http::Uri>()
+        .ok()
+        .and_then(|uri| uri.path_and_query().map(|path| path.path().to_owned()))
+        .unwrap_or_else(|| destination.to_owned())
 }
 
 fn path_matches_base_path(path: &str, base_path: &str) -> bool {
@@ -825,11 +1025,7 @@ async fn copy_or_move_response(
         return empty_response(StatusCode::BAD_REQUEST);
     };
 
-    let destination_path = destination
-        .parse::<axum::http::Uri>()
-        .ok()
-        .and_then(|uri| uri.path_and_query().map(|path| path.path().to_owned()))
-        .unwrap_or_else(|| destination.to_owned());
+    let destination_path = destination_path_from_header(&destination);
 
     let destination = match resolve_dav_path_with_root(config, root_dir, &destination_path) {
         Ok(path) => path,
@@ -1203,14 +1399,7 @@ fn display_name(href_path: &str) -> String {
 }
 
 fn etag(metadata: &std::fs::Metadata) -> String {
-    let modified = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
-
-    format!("\"{:x}-{:x}\"", metadata.len(), modified)
+    crate::fs::metadata_etag(metadata)
 }
 
 fn join_href(parent: &str, child: &str, is_dir: bool) -> String {
@@ -1292,5 +1481,3 @@ mod tests {
         assert!(!should_no_cache("/dav/file.txt"));
     }
 }
-
-

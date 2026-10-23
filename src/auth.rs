@@ -297,6 +297,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AuthConfig, DavMethod, DigestAlgorithm, LoggingConfig, MethodsConfig, ServerConfig,
+        ThumbnailConfig,
     };
 
     fn config() -> AppConfig {
@@ -322,6 +323,7 @@ mod tests {
             logging: LoggingConfig {
                 level: "info".into(),
             },
+            thumbnails: ThumbnailConfig::default(),
             users: vec![
                 UserConfig {
                     username: "admin".into(),
@@ -342,6 +344,7 @@ mod tests {
                     tokens: vec!["token-2".into()],
                 },
             ],
+            config_dir: PathBuf::from("."),
         }
     }
 

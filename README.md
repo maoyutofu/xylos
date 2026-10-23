@@ -20,6 +20,11 @@ When using a `-with-app` package, start `xylos` from the extracted directory to
 serve the web client at `/app/`. The regular package does not include the web
 client; build it separately and place it at `app/dist`.
 
+The Web client requests server-generated WebP thumbnails on demand. By default,
+the cache lives in `.xylos-cache` beside each user's WebDAV root, outside the
+served files. Configure size limits, cache retention, and upload prewarming in
+the optional `[thumbnails]` section of `config.full.toml`.
+
 ## Configuration
 
 Start from `config.example.toml`.

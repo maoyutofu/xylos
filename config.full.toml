@@ -27,6 +27,18 @@ disabled = []
 [logging]
 level = "info"
 
+# Server-side WebP thumbnails for the Web client. Cached outside each WebDAV root.
+[thumbnails]
+enabled = true
+# cache_dir = "/var/cache/xylos" # optional; defaults beside each user's root
+max_source_bytes = 20971520
+max_pixels = 60000000
+width = 320
+max_concurrency = 2
+max_cache_bytes = 1073741824
+ttl_days = 30
+prewarm_on_upload = true
+
 [[users]]
 username = "admin"
 root_dir = "/tmp/xylos-data/admin"

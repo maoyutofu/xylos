@@ -14,7 +14,11 @@ pub struct AppConfig {
     pub auth: AuthConfig,
     pub methods: MethodsConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub thumbnails: ThumbnailConfig,
     pub users: Vec<UserConfig>,
+    #[serde(skip)]
+    pub config_dir: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +74,44 @@ pub struct MethodsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoggingConfig {
     pub level: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ThumbnailConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub cache_dir: Option<PathBuf>,
+    #[serde(default = "default_thumbnail_max_source_bytes")]
+    pub max_source_bytes: u64,
+    #[serde(default = "default_thumbnail_max_pixels")]
+    pub max_pixels: u64,
+    #[serde(default = "default_thumbnail_width")]
+    pub width: u32,
+    #[serde(default = "default_thumbnail_concurrency")]
+    pub max_concurrency: usize,
+    #[serde(default = "default_thumbnail_max_cache_bytes")]
+    pub max_cache_bytes: u64,
+    #[serde(default = "default_thumbnail_ttl_days")]
+    pub ttl_days: u64,
+    #[serde(default = "default_true")]
+    pub prewarm_on_upload: bool,
+}
+
+impl Default for ThumbnailConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cache_dir: None,
+            max_source_bytes: default_thumbnail_max_source_bytes(),
+            max_pixels: default_thumbnail_max_pixels(),
+            width: default_thumbnail_width(),
+            max_concurrency: default_thumbnail_concurrency(),
+            max_cache_bytes: default_thumbnail_max_cache_bytes(),
+            ttl_days: default_thumbnail_ttl_days(),
+            prewarm_on_upload: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -196,10 +238,16 @@ impl AppConfig {
             source,
         })?;
 
-        let config: AppConfig = toml::from_str(&raw).map_err(|source| AppError::ConfigParse {
-            path: path.display().to_string(),
-            source,
-        })?;
+        let mut config: AppConfig =
+            toml::from_str(&raw).map_err(|source| AppError::ConfigParse {
+                path: path.display().to_string(),
+                source,
+            })?;
+
+        config.config_dir = fs::canonicalize(path)
+            .ok()
+            .and_then(|path| path.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."));
 
         config.validate()?;
         Ok(config)
@@ -211,6 +259,7 @@ impl AppConfig {
         validate_logging(&self.logging)?;
         validate_users(&self.auth, &self.users)?;
         validate_methods(&self.methods)?;
+        validate_thumbnails(&self.thumbnails)?;
         Ok(())
     }
 
@@ -267,6 +316,7 @@ impl AppConfig {
             },
             methods: MethodsConfig { disabled: vec![] },
             logging: LoggingConfig { level: log_level },
+            thumbnails: ThumbnailConfig::default(),
             users: vec![UserConfig {
                 username,
                 root_dir,
@@ -283,6 +333,7 @@ impl AppConfig {
                 ],
                 tokens: vec![],
             }],
+            config_dir: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         };
 
         config.validate()?;
@@ -384,6 +435,34 @@ fn default_upload_idle_timeout_secs() -> u64 {
     120
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_thumbnail_max_source_bytes() -> u64 {
+    20 * 1024 * 1024
+}
+
+fn default_thumbnail_max_pixels() -> u64 {
+    60_000_000
+}
+
+fn default_thumbnail_width() -> u32 {
+    320
+}
+
+fn default_thumbnail_concurrency() -> usize {
+    2
+}
+
+fn default_thumbnail_max_cache_bytes() -> u64 {
+    1024 * 1024 * 1024
+}
+
+fn default_thumbnail_ttl_days() -> u64 {
+    30
+}
+
 fn validate_server(server: &ServerConfig) -> Result<(), AppError> {
     if server.host.trim().is_empty() {
         return Err(AppError::ConfigInvalid(
@@ -476,6 +555,40 @@ fn validate_methods(methods: &MethodsConfig) -> Result<(), AppError> {
                 "duplicate disabled method: {method:?}"
             )));
         }
+    }
+
+    Ok(())
+}
+
+fn validate_thumbnails(thumbnails: &ThumbnailConfig) -> Result<(), AppError> {
+    if !(64..=1024).contains(&thumbnails.width) {
+        return Err(AppError::ConfigInvalid(
+            "thumbnails.width must be between 64 and 1024".into(),
+        ));
+    }
+
+    if thumbnails.max_concurrency == 0 {
+        return Err(AppError::ConfigInvalid(
+            "thumbnails.max_concurrency must be greater than 0".into(),
+        ));
+    }
+
+    if thumbnails.max_source_bytes == 0 {
+        return Err(AppError::ConfigInvalid(
+            "thumbnails.max_source_bytes must be greater than 0".into(),
+        ));
+    }
+
+    if thumbnails.max_pixels == 0 {
+        return Err(AppError::ConfigInvalid(
+            "thumbnails.max_pixels must be greater than 0".into(),
+        ));
+    }
+
+    if thumbnails.max_cache_bytes == 0 {
+        return Err(AppError::ConfigInvalid(
+            "thumbnails.max_cache_bytes must be greater than 0".into(),
+        ));
     }
 
     Ok(())
@@ -627,6 +740,7 @@ mod tests {
             logging: LoggingConfig {
                 level: "info".into(),
             },
+            thumbnails: ThumbnailConfig::default(),
             users: vec![UserConfig {
                 username: "admin".into(),
                 root_dir: PathBuf::from("/tmp/xylos-admin"),
@@ -641,6 +755,7 @@ mod tests {
                 permissions: vec![Permission::Read, Permission::Write],
                 tokens: vec!["token-1".into()],
             }],
+            config_dir: PathBuf::from("."),
         }
     }
 

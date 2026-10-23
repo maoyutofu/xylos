@@ -82,6 +82,12 @@ cargo run -- --config config.example.toml
 
 示例配置会将 WebDAV 暴露在 `/dav`。
 
+Web 客户端会按需请求服务端生成的 WebP 缩略图。默认缓存放在用户根目录旁边的
+`.xylos-cache` 中，不会出现在 WebDAV 文件列表里。可通过 `[thumbnails]` 配置
+`enabled`、`cache_dir`、`width`、`max_source_bytes`、`max_pixels`、
+`max_cache_bytes`、`ttl_days` 和 `prewarm_on_upload`；完整示例见
+`config.full.toml`。关闭后，客户端会回退到直接读取受支持的原图。
+
 你也可以不提供配置文件，只通过一组最小 CLI 参数启动：
 
 ```sh

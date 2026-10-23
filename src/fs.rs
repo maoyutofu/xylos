@@ -68,6 +68,17 @@ pub fn resolve_dav_path_with_root(
     Ok(DavPath { href_path, fs_path })
 }
 
+pub fn metadata_etag(metadata: &std::fs::Metadata) -> String {
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+
+    format!("\"{:x}-{:x}\"", metadata.len(), modified)
+}
+
 pub fn canonicalize_existing_under_root(
     root_dir: &Path,
     path: &Path,
@@ -119,7 +130,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AppConfig, AuthConfig, AuthScheme, DigestAlgorithm, LoggingConfig, MethodsConfig,
-        ServerConfig, UserConfig,
+        ServerConfig, ThumbnailConfig, UserConfig,
     };
 
     fn config() -> AppConfig {
@@ -143,6 +154,7 @@ mod tests {
             logging: LoggingConfig {
                 level: "info".into(),
             },
+            thumbnails: ThumbnailConfig::default(),
             users: vec![UserConfig {
                 username: "admin".into(),
                 root_dir: "/tmp/xylos-root".into(),
@@ -152,6 +164,7 @@ mod tests {
                 permissions: vec![],
                 tokens: vec![],
             }],
+            config_dir: PathBuf::from("."),
         }
     }
 

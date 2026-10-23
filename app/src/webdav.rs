@@ -1,7 +1,7 @@
 use crate::models::{AuthType, Entry, ServerAccount};
 use gloo_storage::{LocalStorage, Storage};
 use quick_xml::de::from_str;
-use reqwest::header::{HeaderName, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderName};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -54,8 +54,7 @@ pub async fn test_server_connection(server: &ServerAccount) -> Result<(), String
     }
     let url = join_url(&server.base_url, "/");
     let client = reqwest::Client::new();
-    let mut request = client
-        .request(reqwest::Method::from_bytes(b"OPTIONS").unwrap(), &url);
+    let mut request = client.request(reqwest::Method::from_bytes(b"OPTIONS").unwrap(), &url);
     request = add_auth(request, server);
 
     let response = request.send().await.map_err(network_error)?;
@@ -129,8 +128,8 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
                 .next()
                 .unwrap_or("/")
                 .to_string();
-            let is_dir = prop.resource_type.and_then(|r| r.collection).is_some()
-                || item.href.ends_with('/');
+            let is_dir =
+                prop.resource_type.and_then(|r| r.collection).is_some() || item.href.ends_with('/');
             Some(Entry {
                 name,
                 href,
@@ -186,10 +185,7 @@ pub async fn execute_write(
     } else if response.status().as_u16() == 412 {
         Err("写操作冲突：远端文件已被修改，请刷新后重试".into())
     } else {
-        Err(format!(
-            "WebDAV 返回 {}，操作未完成",
-            response.status()
-        ))
+        Err(format!("WebDAV 返回 {}，操作未完成", response.status()))
     }
 }
 
@@ -212,10 +208,59 @@ pub async fn download_bytes(server: &ServerAccount, path: &str) -> Result<Vec<u8
         .map_err(network_error)
 }
 
-fn add_auth(
-    request: reqwest::RequestBuilder,
+#[derive(Debug)]
+pub enum ThumbnailDownload {
+    Ready(Vec<u8>),
+    EndpointUnavailable,
+    UnsupportedFormat,
+    Failed(String),
+}
+
+pub async fn download_thumbnail(
     server: &ServerAccount,
-) -> reqwest::RequestBuilder {
+    href: &str,
+    version: &str,
+    width: u32,
+) -> ThumbnailDownload {
+    if !is_online() {
+        return ThumbnailDownload::Failed("offline".into());
+    }
+
+    let Some(origin) = url_origin(&server.base_url) else {
+        return ThumbnailDownload::EndpointUnavailable;
+    };
+    let url = format!(
+        "{origin}/_xylos/thumbnail?path={}&w={width}&v={}",
+        urlencoding::encode(href),
+        urlencoding::encode(version),
+    );
+    let client = reqwest::Client::new();
+    let response = match add_auth(client.get(url), server).send().await {
+        Ok(response) => response,
+        Err(error) => return ThumbnailDownload::Failed(network_error(error)),
+    };
+
+    match response.status().as_u16() {
+        200..=299 => match response.bytes().await {
+            Ok(bytes) => ThumbnailDownload::Ready(bytes.to_vec()),
+            Err(error) => ThumbnailDownload::Failed(network_error(error)),
+        },
+        404 | 405 | 501 => ThumbnailDownload::EndpointUnavailable,
+        415 => ThumbnailDownload::UnsupportedFormat,
+        status => ThumbnailDownload::Failed(format!("thumbnail endpoint returned {status}")),
+    }
+}
+
+fn url_origin(base_url: &str) -> Option<String> {
+    let (scheme, rest) = base_url.split_once("://")?;
+    if scheme.is_empty() || rest.is_empty() {
+        return None;
+    }
+    let host_end = rest.find('/').unwrap_or(rest.len());
+    Some(format!("{scheme}://{}", &rest[..host_end]))
+}
+
+fn add_auth(request: reqwest::RequestBuilder, server: &ServerAccount) -> reqwest::RequestBuilder {
     match server.auth_type {
         AuthType::Basic => request.basic_auth(&server.username, Some(&server.password)),
         AuthType::Bearer => request.header(AUTHORIZATION, format!("Bearer {}", server.token)),
@@ -249,7 +294,11 @@ pub fn join_url(base: &str, path: &str) -> String {
 }
 
 pub fn join_path(base: &str, name: &str) -> String {
-    format!("{}/{}", base.trim_end_matches('/'), urlencoding::encode(name))
+    format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        urlencoding::encode(name)
+    )
 }
 
 pub fn normalize_path(path: &str) -> String {
@@ -297,9 +346,7 @@ pub fn normalize_href(base: &str, current: &str, href: &str) -> String {
 
 fn url_path(url: &str) -> &str {
     if let Some((_, rest)) = url.split_once("://") {
-        rest.find('/')
-            .map(|index| &rest[index..])
-            .unwrap_or("/")
+        rest.find('/').map(|index| &rest[index..]).unwrap_or("/")
     } else {
         url
     }
@@ -327,7 +374,13 @@ pub fn parent_path(path: &str) -> String {
     let normalized = normalize_path(path);
     normalized
         .rsplit_once('/')
-        .map(|(parent, _)| if parent.is_empty() { "/".into() } else { parent.into() })
+        .map(|(parent, _)| {
+            if parent.is_empty() {
+                "/".into()
+            } else {
+                parent.into()
+            }
+        })
         .unwrap_or_else(|| "/".into())
 }
 
@@ -360,7 +413,6 @@ pub fn format_date(raw: &str) -> String {
     let s = d.get_seconds();
     format!("{y:04}-{m:02}-{day:02} {h:02}:{min:02}:{s:02}")
 }
-
 
 fn network_error(error: reqwest::Error) -> String {
     format!("网络请求失败: {error}。跨域访问时请检查 WebDAV 服务的 CORS 配置。")

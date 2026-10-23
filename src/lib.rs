@@ -7,3 +7,4 @@ pub mod password;
 pub mod permission;
 pub mod prop;
 pub mod server;
+pub mod thumbnail;
