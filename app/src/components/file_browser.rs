@@ -193,6 +193,7 @@ pub fn FileBrowser(
         };
         if sort_asc() { cmp } else { cmp.reverse() }
     });
+    let preview_entries = sorted_entries.clone();
 
     rsx! {
         div { class: "file-browser",
@@ -595,6 +596,7 @@ pub fn FileBrowser(
                     key: "{target.href}",
                     server: server_sig(),
                     entry: target,
+                    directory_entries: preview_entries,
                     on_close: move |_| preview_target.set(None),
                     on_download: move |entry| handle_download(entry),
                 }

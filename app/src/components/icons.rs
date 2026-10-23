@@ -270,6 +270,40 @@ pub fn IconArrowBack() -> Element {
 }
 
 #[component]
+pub fn IconChevronLeft() -> Element {
+    rsx! {
+        svg {
+            "viewBox": "0 0 24 24",
+            "width": "24",
+            "height": "24",
+            "fill": "none",
+            "stroke": "currentColor",
+            "stroke_width": "2",
+            "stroke_linecap": "round",
+            "stroke_linejoin": "round",
+            polyline { "points": "15 18 9 12 15 6" }
+        }
+    }
+}
+
+#[component]
+pub fn IconChevronRight() -> Element {
+    rsx! {
+        svg {
+            "viewBox": "0 0 24 24",
+            "width": "24",
+            "height": "24",
+            "fill": "none",
+            "stroke": "currentColor",
+            "stroke_width": "2",
+            "stroke_linecap": "round",
+            "stroke_linejoin": "round",
+            polyline { "points": "9 18 15 12 9 6" }
+        }
+    }
+}
+
+#[component]
 pub fn IconRefresh() -> Element {
     rsx! {
         svg {

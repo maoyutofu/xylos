@@ -427,6 +427,18 @@ impl I18n {
         if self.is_zh() { "关闭预览" } else { "Close Preview" }
     }
 
+    pub fn preview_previous_image(&self) -> &'static str {
+        if self.is_zh() { "上一张图片" } else { "Previous image" }
+    }
+
+    pub fn preview_next_image(&self) -> &'static str {
+        if self.is_zh() { "下一张图片" } else { "Next image" }
+    }
+
+    pub fn preview_swipe_hint(&self) -> &'static str {
+        if self.is_zh() { "左右滑动切换图片" } else { "Swipe left or right to switch images" }
+    }
+
     pub fn menu_rename(&self) -> &'static str {
         if self.is_zh() { "重命名" } else { "Rename" }
     }

@@ -277,30 +277,49 @@ pub fn normalize_path(path: &str) -> String {
 }
 
 pub fn normalize_href(base: &str, current: &str, href: &str) -> String {
-    let absolute_path = href.starts_with('/') || href.starts_with("http://") || href.starts_with("https://");
-    let path = if href.starts_with("http://") || href.starts_with("https://") {
-        href.split_once("//")
-            .and_then(|(_, rest)| rest.split_once('/').map(|(_, path)| path))
+    let absolute_path =
+        href.starts_with('/') || href.starts_with("http://") || href.starts_with("https://");
+    let decoded = urlencoding::decode(url_path(href))
+        .map(|value| value.into_owned())
+        .unwrap_or_else(|_| url_path(href).to_string());
+
+    if absolute_path {
+        let href_path = normalize_path(&format!("/{}", decoded.trim_start_matches('/')));
+        let base_path = normalize_path(&format!(
+            "/{}",
+            decode_path(url_path(base)).trim_matches('/')
+        ));
+        normalize_path(strip_base_path(&href_path, &base_path))
+    } else {
+        normalize_path(&format!("{}/{}", current.trim_end_matches('/'), decoded))
+    }
+}
+
+fn url_path(url: &str) -> &str {
+    if let Some((_, rest)) = url.split_once("://") {
+        rest.find('/')
+            .map(|index| &rest[index..])
             .unwrap_or("/")
     } else {
-        href
-    };
-    let decoded = urlencoding::decode(path)
+        url
+    }
+}
+
+fn decode_path(path: &str) -> String {
+    urlencoding::decode(path)
         .map(|value| value.into_owned())
-        .unwrap_or_else(|_| path.to_string());
-    let base_path = base
-        .split_once("//")
-        .and_then(|(_, rest)| rest.split_once('/').map(|(_, path)| path))
-        .unwrap_or("");
-    let relative = if !base_path.is_empty() && decoded.starts_with(base_path) {
-        decoded[base_path.len()..].to_string()
-    } else {
-        decoded
-    };
-    if absolute_path {
-        normalize_path(&format!("/{}", relative.trim_start_matches('/')))
-    } else {
-        normalize_path(&format!("{}/{}", current.trim_end_matches('/'), relative))
+        .unwrap_or_else(|_| path.to_string())
+}
+
+fn strip_base_path<'a>(path: &'a str, base_path: &str) -> &'a str {
+    if base_path == "/" {
+        return path;
+    }
+
+    match path.strip_prefix(base_path) {
+        Some("") => "/",
+        Some(rest) if rest.starts_with('/') => rest,
+        _ => path,
     }
 }
 
@@ -345,4 +364,59 @@ pub fn format_date(raw: &str) -> String {
 
 fn network_error(error: reqwest::Error) -> String {
     format!("网络请求失败: {error}。跨域访问时请检查 WebDAV 服务的 CORS 配置。")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_href_is_not_listed_as_its_own_child() {
+        assert_eq!(
+            normalize_href("http://localhost:8081/dav/", "/", "/dav/"),
+            "/"
+        );
+        assert_eq!(
+            normalize_href("http://localhost:8081/dav", "/", "/dav"),
+            "/"
+        );
+    }
+
+    #[test]
+    fn base_path_is_removed_from_absolute_and_absolute_url_hrefs() {
+        let base = "http://localhost:8081/dav/";
+        assert_eq!(normalize_href(base, "/", "/dav/docs"), "/docs");
+        assert_eq!(
+            normalize_href(base, "/", "http://localhost:8081/dav/docs/readme.txt"),
+            "/docs/readme.txt"
+        );
+        assert_eq!(
+            normalize_href(base, "/", "/dav/My%20Documents"),
+            "/My Documents"
+        );
+    }
+
+    #[test]
+    fn nested_base_path_is_removed_without_prefix_false_positives() {
+        let base = "http://localhost:8081/webdav/dav/";
+        assert_eq!(normalize_href(base, "/", "/webdav/dav/docs"), "/docs");
+        assert_eq!(
+            normalize_href("http://localhost:8081/dav/", "/", "/dav2/docs"),
+            "/dav2/docs"
+        );
+    }
+
+    #[test]
+    fn relative_hrefs_are_resolved_against_the_current_directory() {
+        let base = "http://localhost:8081/dav/";
+        assert_eq!(normalize_href(base, "/", "docs"), "/docs");
+        assert_eq!(
+            normalize_href(base, "/docs", "readme.txt"),
+            "/docs/readme.txt"
+        );
+        assert_eq!(
+            normalize_href(base, "/docs", "../index.html"),
+            "/index.html"
+        );
+    }
 }

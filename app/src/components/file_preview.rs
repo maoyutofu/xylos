@@ -1,11 +1,16 @@
-use crate::components::icons::{IconClose, IconDownload, IconFile};
+use crate::components::icons::{
+    IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconFile, IconImage,
+};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount};
 use crate::webdav::{download_bytes, format_date, format_size};
 use dioxus::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
 const KIB: u64 = 1024;
 const MIB: u64 = 1024 * KIB;
+const SWIPE_THRESHOLD: f64 = 52.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PreviewKind {
@@ -98,38 +103,101 @@ enum PreviewBody {
     Error,
 }
 
+fn image_gallery(entries: &[Entry], selected: &Entry) -> Vec<Entry> {
+    let mut images = entries
+        .iter()
+        .filter(|entry| !entry.is_dir && PreviewKind::from_entry(entry) == PreviewKind::Image)
+        .cloned()
+        .collect::<Vec<_>>();
+    if !images.iter().any(|entry| entry.href == selected.href)
+        && PreviewKind::from_entry(selected) == PreviewKind::Image
+    {
+        images.insert(0, selected.clone());
+    }
+    images
+}
+
+fn gallery_index(images: &[Entry], selected: &Entry) -> usize {
+    images
+        .iter()
+        .position(|entry| entry.href == selected.href)
+        .unwrap_or(0)
+}
+
+fn shifted_index(current: usize, len: usize, delta: isize) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    if delta < 0 {
+        current.checked_sub(delta.unsigned_abs())
+    } else {
+        let next = current.checked_add(delta as usize)?;
+        (next < len).then_some(next)
+    }
+}
+
+fn swipe_direction(delta_x: f64, delta_y: f64) -> Option<isize> {
+    if delta_x.abs() < SWIPE_THRESHOLD || delta_x.abs() <= delta_y.abs() {
+        return None;
+    }
+    Some(if delta_x < 0.0 { 1 } else { -1 })
+}
+
 #[component]
 pub fn FilePreviewModal(
     server: ServerAccount,
     entry: Entry,
+    directory_entries: Vec<Entry>,
     on_close: EventHandler<()>,
     on_download: EventHandler<Entry>,
 ) -> Element {
     let lang = use_context::<Signal<Language>>()();
     let tr = I18n::new(lang);
-    let kind = PreviewKind::from_entry(&entry);
+    let images = image_gallery(&directory_entries, &entry);
+    let image_count = images.len();
+    let initial_index = gallery_index(&images, &entry);
+    let mut current_index = use_signal(|| initial_index);
     let mut body = use_signal(|| PreviewBody::Loading);
+    let mut active_blob_url = use_signal(|| None::<String>);
+    let mut drag_start = use_signal(|| None::<(i32, f64, f64)>);
+    let mut drag_offset = use_signal(|| 0.0_f64);
+    let mut dragging = use_signal(|| false);
+    let request_version = use_hook(|| Rc::new(Cell::new(0_u32)));
 
-    let request_entry = entry.clone();
-    let request_server = server.clone();
+    let request_images = images.clone();
+    let request_fallback = entry.clone();
+    let request_version_for_effect = request_version.clone();
     use_effect(move || {
-        let entry = request_entry.clone();
-        let server = request_server.clone();
+        let index = current_index();
+        let selected_entry = request_images
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| request_fallback.clone());
+        let kind = PreviewKind::from_entry(&selected_entry);
+        let version = request_version_for_effect.get().wrapping_add(1);
+        request_version_for_effect.set(version);
         body.set(PreviewBody::Loading);
 
         if kind == PreviewKind::Unsupported {
             body.set(PreviewBody::Unsupported);
             return;
         }
-        if let (Some(size), Some(limit)) = (entry.size, kind.max_size()) {
+        if let (Some(size), Some(limit)) = (selected_entry.size, kind.max_size()) {
             if size > limit {
                 body.set(PreviewBody::TooLarge(limit));
                 return;
             }
         }
 
+        let server = server.clone();
+        let request_version = request_version_for_effect.clone();
         spawn(async move {
-            match download_bytes(&server, &entry.href).await {
+            let result = download_bytes(&server, &selected_entry.href).await;
+            if request_version.get() != version {
+                return;
+            }
+
+            match result {
                 Ok(bytes) => {
                     if kind == PreviewKind::Text {
                         match decode_text(&bytes) {
@@ -137,8 +205,18 @@ pub fn FilePreviewModal(
                             Err(()) => body.set(PreviewBody::Unsupported),
                         }
                     } else {
-                        match create_blob_url(&bytes, preview_mime(&entry, kind)) {
-                            Ok(url) => body.set(PreviewBody::Media { url, kind }),
+                        match create_blob_url(&bytes, preview_mime(&selected_entry, kind)) {
+                            Ok(url) => {
+                                if request_version.get() != version {
+                                    revoke_blob_url(&url);
+                                    return;
+                                }
+                                if let Some(previous_url) = active_blob_url() {
+                                    revoke_blob_url(&previous_url);
+                                }
+                                active_blob_url.set(Some(url.clone()));
+                                body.set(PreviewBody::Media { url, kind });
+                            }
                             Err(()) => body.set(PreviewBody::Error),
                         }
                     }
@@ -149,24 +227,62 @@ pub fn FilePreviewModal(
     });
 
     use_drop(move || {
-        if let PreviewBody::Media { url, .. } = body() {
+        if let Some(url) = active_blob_url() {
             revoke_blob_url(&url);
         }
     });
 
-    let close = EventHandler::new(move |_| {
-        on_close.call(());
+    let navigation_images = images.clone();
+    let navigate = EventHandler::new(move |delta: isize| {
+        let Some(next) = shifted_index(current_index(), navigation_images.len(), delta) else {
+            return;
+        };
+        if let Some(url) = active_blob_url() {
+            revoke_blob_url(&url);
+            active_blob_url.set(None);
+        }
+        body.set(PreviewBody::Loading);
+        current_index.set(next);
     });
-    let download_entry = entry.clone();
-    let download = EventHandler::new(move |_| on_download.call(download_entry.clone()));
-    let extension = file_extension(&entry.name);
-    let date = format_date(&entry.modified);
-    let meta = match entry.size {
+
+    let close = EventHandler::new(move |_| on_close.call(()));
+    let download_images = images.clone();
+    let download_fallback = entry.clone();
+    let download = EventHandler::new(move |_| {
+        let selected_entry = download_images
+            .get(current_index())
+            .cloned()
+            .unwrap_or_else(|| download_fallback.clone());
+        on_download.call(selected_entry);
+    });
+
+    let selected_entry = images
+        .get(current_index())
+        .cloned()
+        .unwrap_or_else(|| entry.clone());
+    let kind = PreviewKind::from_entry(&selected_entry);
+    let extension = file_extension(&selected_entry.name);
+    let date = format_date(&selected_entry.modified);
+    let meta = match selected_entry.size {
         Some(size) if !date.is_empty() => format!("{} · {}", format_size(size), date),
         Some(size) => format_size(size),
         None if !date.is_empty() => date,
         None => tr.menu_preview().to_string(),
     };
+    let is_image = kind == PreviewKind::Image;
+    let has_gallery = is_image && image_count > 1;
+    let position = current_index().min(image_count.saturating_sub(1)) + 1;
+    let body_class = if is_image {
+        "preview-body preview-image-body"
+    } else {
+        "preview-body"
+    };
+    let stage_class = if dragging() {
+        "preview-image-stage is-dragging"
+    } else {
+        "preview-image-stage"
+    };
+    let image_style = format!("transform: translate3d({}px, 0, 0);", drag_offset());
 
     rsx! {
         div {
@@ -174,28 +290,125 @@ pub fn FilePreviewModal(
             onclick: move |_| close.call(()),
             div {
                 class: "preview-dialog",
+                tabindex: "0",
+                role: "dialog",
+                aria_modal: "true",
                 onclick: move |event| event.stop_propagation(),
+                onmounted: move |event| {
+                    spawn(async move {
+                        let _ = event.set_focus(true).await;
+                    });
+                },
+                onkeydown: move |event| {
+                    match event.key() {
+                        Key::Escape => {
+                            event.prevent_default();
+                            close.call(());
+                        }
+                        Key::ArrowLeft if has_gallery => {
+                            event.prevent_default();
+                            navigate.call(-1);
+                        }
+                        Key::ArrowRight if has_gallery => {
+                            event.prevent_default();
+                            navigate.call(1);
+                        }
+                        _ => {}
+                    }
+                },
                 div { class: "preview-header",
                     div { class: "preview-heading",
-                        div { class: "preview-filename", title: "{entry.name}", "{entry.name}" }
-                        div { class: "preview-meta", "{meta}" }
+                        div { class: "preview-heading-top",
+                            div { class: "preview-kind-badge",
+                                if is_image {
+                                    IconImage { is_large: false }
+                                } else {
+                                    IconFile { is_large: false }
+                                }
+                            }
+                            div { class: "preview-heading-copy",
+                                div {
+                                    class: "preview-filename",
+                                    title: "{selected_entry.name}",
+                                    "{selected_entry.name}"
+                                }
+                                div { class: "preview-meta", "{meta}" }
+                            }
+                        }
                     }
                     div { class: "preview-header-actions",
+                        if has_gallery {
+                            span { class: "preview-position-pill", "{position} / {image_count}" }
+                        }
                         button {
                             class: "preview-action-btn",
                             title: "{tr.menu_download()}",
+                            aria_label: "{tr.menu_download()}",
                             onclick: move |_| download.call(()),
                             IconDownload {}
                         }
                         button {
-                            class: "preview-action-btn",
+                            class: "preview-action-btn preview-close-btn",
                             title: "{tr.tooltip_close_preview()}",
+                            aria_label: "{tr.tooltip_close_preview()}",
                             onclick: move |_| close.call(()),
                             IconClose {}
                         }
                     }
                 }
-                div { class: "preview-body",
+                div {
+                    class: "{body_class}",
+                    onpointerdown: move |event| {
+                        if !is_image {
+                            return;
+                        }
+                        let point = event.client_coordinates();
+                        drag_start.set(Some((event.pointer_id(), point.x, point.y)));
+                        drag_offset.set(0.0);
+                        dragging.set(false);
+                    },
+                    onpointermove: move |event| {
+                        if !is_image {
+                            return;
+                        }
+                        let Some((pointer_id, start_x, start_y)) = drag_start() else {
+                            return;
+                        };
+                        if pointer_id != event.pointer_id() {
+                            return;
+                        }
+                        let point = event.client_coordinates();
+                        let delta_x = point.x - start_x;
+                        let delta_y = point.y - start_y;
+                        if !dragging() {
+                            if delta_x.abs() < 6.0 || delta_x.abs() <= delta_y.abs() {
+                                return;
+                            }
+                            dragging.set(true);
+                        }
+                        event.prevent_default();
+                        drag_offset.set(delta_x.clamp(-180.0, 180.0));
+                    },
+                    onpointerup: move |event| {
+                        if !is_image || drag_start().map(|state| state.0) != Some(event.pointer_id()) {
+                            return;
+                        }
+                        let delta_x = drag_offset();
+                        let was_dragging = dragging();
+                        drag_start.set(None);
+                        dragging.set(false);
+                        drag_offset.set(0.0);
+                        if was_dragging {
+                            if let Some(delta) = swipe_direction(delta_x, 0.0) {
+                                navigate.call(delta);
+                            }
+                        }
+                    },
+                    onpointercancel: move |_| {
+                        drag_start.set(None);
+                        dragging.set(false);
+                        drag_offset.set(0.0);
+                    },
                     match body() {
                         PreviewBody::Loading => rsx! {
                             div { class: "preview-status",
@@ -205,17 +418,21 @@ pub fn FilePreviewModal(
                         },
                         PreviewBody::Media { url, kind } => match kind {
                             PreviewKind::Image => rsx! {
-                                img {
-                                    class: "preview-image",
-                                    src: "{url}",
-                                    alt: "{entry.name}",
+                                div { class: stage_class,
+                                    img {
+                                        class: "preview-image",
+                                        src: "{url}",
+                                        alt: "{selected_entry.name}",
+                                        draggable: false,
+                                        style: "{image_style}",
+                                    }
                                 }
                             },
                             PreviewKind::Pdf => rsx! {
                                 iframe {
                                     class: "preview-pdf",
                                     src: "{url}",
-                                    title: "{entry.name}",
+                                    title: "{selected_entry.name}",
                                 }
                             },
                             PreviewKind::Video => rsx! {
@@ -259,7 +476,10 @@ pub fn FilePreviewModal(
                             div { class: "preview-status preview-fallback",
                                 div { class: "preview-file-icon", IconFile { is_large: true } }
                                 div { class: "preview-status-title", "{tr.preview_too_large_title()}" }
-                                div { class: "preview-status-desc", "{tr.preview_too_large_desc(&format_size(limit))}" }
+                                div {
+                                    class: "preview-status-desc",
+                                    "{tr.preview_too_large_desc(&format_size(limit))}"
+                                }
                                 button {
                                     class: "btn-primary preview-download-button",
                                     onclick: move |_| download.call(()),
@@ -281,6 +501,27 @@ pub fn FilePreviewModal(
                                 }
                             }
                         },
+                    }
+                    if has_gallery {
+                        button {
+                            class: "preview-gallery-btn previous",
+                            title: "{tr.preview_previous_image()}",
+                            aria_label: "{tr.preview_previous_image()}",
+                            disabled: current_index() == 0,
+                            onpointerdown: move |event| event.stop_propagation(),
+                            onclick: move |_| navigate.call(-1),
+                            IconChevronLeft {}
+                        }
+                        button {
+                            class: "preview-gallery-btn next",
+                            title: "{tr.preview_next_image()}",
+                            aria_label: "{tr.preview_next_image()}",
+                            disabled: current_index() + 1 >= image_count,
+                            onpointerdown: move |event| event.stop_propagation(),
+                            onclick: move |_| navigate.call(1),
+                            IconChevronRight {}
+                        }
+                        div { class: "preview-swipe-hint", "{tr.preview_swipe_hint()}" }
                     }
                 }
             }
@@ -436,5 +677,49 @@ mod tests {
             Ok("hello 世界".into())
         );
         assert!(decode_text(&[0x68, 0x00, 0x69, 0x00]).is_err());
+    }
+
+    #[test]
+    fn builds_image_gallery_in_display_order() {
+        let folder = Entry {
+            name: "album".into(),
+            href: "/album".into(),
+            is_dir: true,
+            ..Entry::default()
+        };
+        let entries = vec![
+            folder,
+            entry("first.jpg", None),
+            entry("notes.txt", None),
+            entry("second.png", None),
+        ];
+
+        let images = image_gallery(&entries, &entries[3]);
+
+        assert_eq!(
+            images
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["first.jpg", "second.png"]
+        );
+        assert_eq!(gallery_index(&images, &entries[3]), 1);
+    }
+
+    #[test]
+    fn keeps_gallery_navigation_within_bounds() {
+        assert_eq!(shifted_index(1, 3, 1), Some(2));
+        assert_eq!(shifted_index(1, 3, -1), Some(0));
+        assert_eq!(shifted_index(0, 3, -1), None);
+        assert_eq!(shifted_index(2, 3, 1), None);
+        assert_eq!(shifted_index(0, 0, 1), None);
+    }
+
+    #[test]
+    fn detects_horizontal_swipes_only() {
+        assert_eq!(swipe_direction(-80.0, 20.0), Some(1));
+        assert_eq!(swipe_direction(80.0, 20.0), Some(-1));
+        assert_eq!(swipe_direction(30.0, 5.0), None);
+        assert_eq!(swipe_direction(80.0, 90.0), None);
     }
 }
