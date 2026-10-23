@@ -1,10 +1,17 @@
 const CACHE_PREFIX = "xylos-webdav-shell-";
-const CACHE = "xylos-webdav-shell-589b7303bae8f0e4";
-const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxh916b161491fff2b1.js","/app/assets/xylos-webdav-client_bg-dxh9110e3cc4d496dd5.wasm","/app/index.html","/app/manifest.webmanifest"];
+const CACHE = "xylos-webdav-shell-6b9597ff6a2a8241";
+const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxh7ecebce02cfa1870.js","/app/assets/xylos-webdav-client_bg-dxh3bfda0f7f6ec14ac.wasm","/app/index.html","/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(async (cache) => {
+      const core = PRECACHE.filter((path) => path === "/app/index.html" ||
+        /\.(css|js|wasm)$/.test(path));
+      await cache.addAll(core);
+      await Promise.allSettled(PRECACHE.filter((path) => !core.includes(path))
+        .map((path) => cache.add(path)));
+      await self.skipWaiting();
+    })
   );
 });
 

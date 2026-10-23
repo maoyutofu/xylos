@@ -21,6 +21,14 @@
         <link rel="icon" type="image/png" sizes="192x192" href="/app/assets/icon-192.png">
         <link rel="icon" type="image/svg+xml" href="/app/assets/icon.svg">
 
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/app/sw.js')
+                    .then((registration) => registration.update())
+                    .catch((error) => console.warn('Offline cache unavailable:', error));
+            }
+        </script>
+
         <style>
             /* Inter Font */
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap') layer;

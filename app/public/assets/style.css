@@ -1153,6 +1153,11 @@ button, input, select {
     padding: 16px 16px 24px;
   }
 
+  .file-list-row:nth-child(n+3) .file-popover-menu {
+    top: auto;
+    bottom: calc(100% + 4px);
+  }
+
   .file-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1191,12 +1196,20 @@ button, input, select {
     padding: 0;
   }
 
+  .main-viewport .modal-backdrop {
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
   .modal-dialog {
     border-radius: 20px 20px 0 0;
     max-width: 100%;
     animation: sheetEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     max-height: 90dvh;
     overflow-y: auto;
+  }
+
+  .main-viewport .modal-dialog {
+    max-height: calc(90dvh - 56px - env(safe-area-inset-bottom, 0px));
   }
 
   @keyframes sheetEnter {

@@ -4,7 +4,14 @@ const PRECACHE = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(async (cache) => {
+      const core = PRECACHE.filter((path) => path === "/app/index.html" ||
+        /\.(css|js|wasm)$/.test(path));
+      await cache.addAll(core);
+      await Promise.allSettled(PRECACHE.filter((path) => !core.includes(path))
+        .map((path) => cache.add(path)));
+      await self.skipWaiting();
+    })
   );
 });
 

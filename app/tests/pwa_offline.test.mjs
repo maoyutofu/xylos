@@ -28,6 +28,7 @@ test("built PWA preloads every asset and serves it offline", async () => {
   let online = true;
   let claimed = false;
   let skipped = false;
+  let failedAsset = null;
   const response = (path) => ({ path, clone() { return response(path); } });
   const key = (request, ignoreSearch = false) => {
     const url = new URL(typeof request === "string" ? request : request.url, "https://example.test");
@@ -43,6 +44,10 @@ test("built PWA preloads every asset and serves it offline", async () => {
             if (!online) throw new Error("offline");
             store.set(path, response(path));
           }
+        },
+        async add(path) {
+          if (!online || path === failedAsset) throw new Error("asset unavailable");
+          store.set(path, response(path));
         },
         async match(request, options) { return store.get(key(request, options?.ignoreSearch)); },
         async put(request, value) { store.set(key(request), value); },
@@ -90,4 +95,20 @@ test("built PWA preloads every asset and serves it offline", async () => {
   assert.equal((await fetchOffline("/app/?source=installed", "navigate")).path, "/app/");
   assert.equal((await fetchOffline("/app/deep/link", "navigate")).path, "/app/index.html");
   await assert.rejects(fetchOffline("/app/assets/missing.js"), /offline/);
+
+  online = true;
+  failedAsset = "/app/assets/icon-512.png";
+  const currentCache = [...stores.keys()].find((name) =>
+    name.startsWith("xylos-webdav-shell-") && name !== "xylos-webdav-shell-old");
+  stores.delete(currentCache);
+  skipped = false;
+  await lifecycle("install");
+  assert.ok(skipped);
+  assert.ok(!stores.get(currentCache).has(failedAsset));
+  online = false;
+  assert.equal((await fetchOffline("/app/", "navigate")).path, "/app/");
+  for (const path of precache.filter((path) => path === "/app/index.html" ||
+    /\.(css|js|wasm)$/.test(path))) {
+    assert.equal((await fetchOffline(path)).path, path);
+  }
 });

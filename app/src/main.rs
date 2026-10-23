@@ -61,19 +61,6 @@ fn App() -> Element {
         });
     };
 
-    use_effect(move || {
-        let _ = dioxus::document::eval(
-            r#"
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/app/sw.js').then((reg) => {
-                    reg.update();
-                }).catch(() => {});
-            }
-            "#,
-        );
-    });
-
-
     let handle_select_server = move |srv: ServerAccount| {
         let _ = LocalStorage::set(ACTIVE_SERVER_ID_KEY, &srv.id);
         active_server.set(Some(srv));
