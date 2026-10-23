@@ -1,11 +1,11 @@
 const CACHE_PREFIX = "xylos-webdav-shell-";
-const CACHE = "xylos-webdav-shell-6b9597ff6a2a8241";
-const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxh7ecebce02cfa1870.js","/app/assets/xylos-webdav-client_bg-dxh3bfda0f7f6ec14ac.wasm","/app/index.html","/app/manifest.webmanifest"];
+const CACHE = "xylos-webdav-shell-d0b681b67582e94e";
+const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxh1c4feda5a96dbb97.js","/app/assets/xylos-webdav-client_bg-dxhfbde18b779aac14c.wasm","/app/index.html","/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then(async (cache) => {
-      const core = PRECACHE.filter((path) => path === "/app/index.html" ||
+      const core = PRECACHE.filter((path) => path === "/app/" || path === "/app/index.html" ||
         /\.(css|js|wasm)$/.test(path));
       await cache.addAll(core);
       await Promise.allSettled(PRECACHE.filter((path) => !core.includes(path))
@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin ||
-      !url.pathname.startsWith("/app/")) return;
+      (url.pathname !== "/app" && !url.pathname.startsWith("/app/"))) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
@@ -43,7 +43,7 @@ self.addEventListener("fetch", (event) => {
       return response;
     } catch (error) {
       if (request.mode === "navigate") {
-        const shell = await cache.match("/app/index.html");
+        const shell = await cache.match("/app/") || await cache.match("/app/index.html");
         if (shell) return shell;
       }
       throw error;

@@ -5,7 +5,7 @@ const PRECACHE = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then(async (cache) => {
-      const core = PRECACHE.filter((path) => path === "/app/index.html" ||
+      const core = PRECACHE.filter((path) => path === "/app/" || path === "/app/index.html" ||
         /\.(css|js|wasm)$/.test(path));
       await cache.addAll(core);
       await Promise.allSettled(PRECACHE.filter((path) => !core.includes(path))
@@ -28,7 +28,7 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin ||
-      !url.pathname.startsWith("/app/")) return;
+      (url.pathname !== "/app" && !url.pathname.startsWith("/app/"))) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
@@ -43,7 +43,7 @@ self.addEventListener("fetch", (event) => {
       return response;
     } catch (error) {
       if (request.mode === "navigate") {
-        const shell = await cache.match("/app/index.html");
+        const shell = await cache.match("/app/") || await cache.match("/app/index.html");
         if (shell) return shell;
       }
       throw error;

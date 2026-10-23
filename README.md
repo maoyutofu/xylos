@@ -123,3 +123,22 @@ For local development, generate a self-signed certificate with:
 ```sh
 ./generate-tls-cert.sh
 ```
+
+For a PWA accessed from a phone by LAN IP, assign the server a fixed LAN IP, install mkcert, and issue a certificate for that IP:
+
+```sh
+./generate-mkcert-cert.sh 192.168.1.10
+```
+
+The script preserves existing certificates. Update the existing `[server.tls]` block in `config.toml` using the paths it prints (do not add a second block):
+
+```toml
+[server.tls]
+enabled = true
+cert_path = "certs/xylos-lan-192.168.1.10-cert.pem"
+key_path = "certs/xylos-lan-192.168.1.10-key.pem"
+```
+
+Run `mkcert -CAROOT` to locate `rootCA.pem`. Install it on each phone; on iOS, enable full trust under Settings > General > About > Certificate Trust Settings. On Android, install it as a CA certificate in system settings. Never distribute `rootCA-key.pem`.
+
+Restart Xylos and open `https://192.168.1.10:8081/app/` on the phone (adjust the port to your configuration). Confirm there is no certificate warning, then add this HTTPS page to the home screen. Keep the phone online for the first load before testing airplane mode. Remove any home-screen shortcut previously installed from HTTP.

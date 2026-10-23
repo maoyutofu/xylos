@@ -121,3 +121,23 @@ PEM 证书和私钥路径。没有该配置块，或 `enabled = false` 时，Xyl
 ```sh
 ./generate-tls-cert.sh
 ```
+
+若手机通过局域网 IP 访问 PWA，先给服务器分配固定局域网 IP，再用 mkcert 为该 IP 签发证书。将示例 IP 换成服务器的实际地址：
+
+```sh
+brew install mkcert # macOS；其他系统请先安装 mkcert
+./generate-mkcert-cert.sh 192.168.1.10
+```
+
+脚本不会覆盖现有证书。将输出的路径写入 `config.toml` 中已有的 `[server.tls]` 配置块（不要重复添加配置块），例如：
+
+```toml
+[server.tls]
+enabled = true
+cert_path = "certs/xylos-lan-192.168.1.10-cert.pem"
+key_path = "certs/xylos-lan-192.168.1.10-key.pem"
+```
+
+运行 `mkcert -CAROOT` 可查看本机 CA 目录。将其中的 `rootCA.pem` 安装到每台需要访问的手机：iPhone/iPad 安装描述文件后，还需到“设置 → 通用 → 关于本机 → 证书信任设置”开启完全信任；Android 在系统设置中安装 CA 证书。不要分发 `rootCA-key.pem`。
+
+重启 Xylos 后，手机通过 `https://192.168.1.10:8081/app/` 访问（端口以实际配置为准），确认浏览器不再显示证书警告。用此 HTTPS 地址重新添加到主屏幕，保持联网完成首次加载，再测试飞行模式。原来从 HTTP 地址添加的主屏幕入口需要删除。

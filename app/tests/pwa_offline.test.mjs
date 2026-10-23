@@ -92,8 +92,9 @@ test("built PWA preloads every asset and serves it offline", async () => {
     return pending;
   };
   for (const path of precache) assert.equal((await fetchOffline(path)).path, path);
+  assert.equal((await fetchOffline("/app", "navigate")).path, "/app/");
   assert.equal((await fetchOffline("/app/?source=installed", "navigate")).path, "/app/");
-  assert.equal((await fetchOffline("/app/deep/link", "navigate")).path, "/app/index.html");
+  assert.equal((await fetchOffline("/app/deep/link", "navigate")).path, "/app/");
   await assert.rejects(fetchOffline("/app/assets/missing.js"), /offline/);
 
   online = true;
@@ -107,7 +108,7 @@ test("built PWA preloads every asset and serves it offline", async () => {
   assert.ok(!stores.get(currentCache).has(failedAsset));
   online = false;
   assert.equal((await fetchOffline("/app/", "navigate")).path, "/app/");
-  for (const path of precache.filter((path) => path === "/app/index.html" ||
+  for (const path of precache.filter((path) => path === "/app/" || path === "/app/index.html" ||
     /\.(css|js|wasm)$/.test(path))) {
     assert.equal((await fetchOffline(path)).path, path);
   }

@@ -142,11 +142,15 @@ pub fn FileBrowser(
         });
     };
 
-    let handle_rename = move || {
+    let mut handle_rename = move || {
         let Some(target) = rename_target() else { return };
         let new_n = rename_name().trim().to_string();
         if new_n.is_empty() {
             on_error.call(tr.err_new_name_empty().into());
+            return;
+        }
+        if new_n == target.name {
+            rename_target.set(None);
             return;
         }
         let srv = server_sig();

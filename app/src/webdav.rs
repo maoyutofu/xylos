@@ -199,6 +199,8 @@ pub async fn execute_write(
         Ok(())
     } else if response.status().as_u16() == 412 {
         Err("写操作冲突：远端文件已被修改，请刷新后重试".into())
+    } else if response.status().as_u16() == 403 {
+        Err("服务器拒绝写操作 (403)：请检查该账号是否具有相应权限（重命名需要 move 权限）".into())
     } else {
         Err(format!("WebDAV 返回 {}，操作未完成", response.status()))
     }
