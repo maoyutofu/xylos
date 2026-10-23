@@ -231,12 +231,13 @@ pub fn IconFile(#[props(default = false)] is_large: bool) -> Element {
 }
 
 #[component]
-pub fn IconImage() -> Element {
+pub fn IconImage(#[props(default = false)] is_large: bool) -> Element {
+    let size = if is_large { "48" } else { "20" };
     rsx! {
         svg {
             "viewBox": "0 0 24 24",
-            "width": "20",
-            "height": "20",
+            "width": "{size}",
+            "height": "{size}",
             "fill": "none",
             "stroke": "currentColor",
             "stroke_width": "2",

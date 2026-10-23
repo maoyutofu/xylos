@@ -1,8 +1,9 @@
 use crate::components::file_preview::FilePreviewModal;
 use crate::components::icons::{
-    IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconImage, IconList,
+    IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconList,
     IconMore, IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
 };
+use crate::components::thumbnail::{is_thumbnail_image, ImageThumbnail};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
@@ -10,16 +11,6 @@ use crate::webdav::{
     parent_path,
 };
 use dioxus::prelude::*;
-
-fn is_image_name(name: &str) -> bool {
-    let lower = name.to_lowercase();
-    lower.ends_with(".png")
-        || lower.ends_with(".jpg")
-        || lower.ends_with(".jpeg")
-        || lower.ends_with(".webp")
-        || lower.ends_with(".gif")
-        || lower.ends_with(".svg")
-}
 
 #[component]
 pub fn FileBrowser(
@@ -313,7 +304,7 @@ pub fn FileBrowser(
                             let item_delete = item.clone();
                             let href = item.href.clone();
                             let is_dir = item.is_dir;
-                            let is_img = !is_dir && is_image_name(&item.name);
+                            let is_img = !is_dir && is_thumbnail_image(&item.name);
                             let is_menu_open = active_menu() == Some(item.href.clone());
                             let item_href_for_menu = item.href.clone();
                             let formatted_date = format_date(&item.modified);
@@ -350,7 +341,10 @@ pub fn FileBrowser(
                                         if is_dir {
                                             IconFolder { is_large: false }
                                         } else if is_img {
-                                            IconImage {}
+                                            ImageThumbnail {
+                                                server: server_sig(),
+                                                entry: item.clone(),
+                                            }
                                         } else {
                                             IconFile { is_large: false }
                                         }
@@ -433,6 +427,7 @@ pub fn FileBrowser(
                             let item_rename = item.clone();
                             let item_delete = item.clone();
                             let is_dir = item.is_dir;
+                            let is_img = !is_dir && is_thumbnail_image(&item.name);
                             let href = item.href.clone();
 
                             rsx! {
@@ -450,6 +445,12 @@ pub fn FileBrowser(
                                         class: if is_dir { "grid-card-preview is-folder" } else { "grid-card-preview" },
                                         if is_dir {
                                             IconFolder { is_large: true }
+                                        } else if is_img {
+                                            ImageThumbnail {
+                                                server: server_sig(),
+                                                entry: item.clone(),
+                                                grid: true,
+                                            }
                                         } else {
                                             IconFile { is_large: true }
                                         }

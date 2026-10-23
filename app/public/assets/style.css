@@ -76,18 +76,33 @@
   padding: 0;
 }
 
-html, body {
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
   font-family: var(--app-font);
   color: var(--app-text);
   background: var(--app-bg);
   min-width: 320px;
   overflow: hidden;
   height: 100%;
-  height: 100dvh;
   margin: 0;
   padding: 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#main {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 button, input, select {
@@ -106,13 +121,14 @@ button, input, select {
   background: var(--app-bg);
   overflow: hidden;
   padding-top: env(safe-area-inset-top, 0px);
+  overscroll-behavior: none;
 }
 
 .window-body {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   overflow: hidden;
   position: relative;
 }
@@ -188,7 +204,9 @@ button, input, select {
 /* Main Content Viewport */
 .main-viewport {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 24px 32px 48px;
   background: var(--app-bg);
 }
@@ -551,6 +569,14 @@ button, input, select {
 .file-icon-box.image {
   color: #3b82f6;
   background: rgba(59, 130, 246, 0.12);
+  overflow: hidden;
+}
+
+.file-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .file-info-box {
@@ -690,6 +716,14 @@ button, input, select {
   justify-content: center;
   position: relative;
   color: var(--app-text-muted);
+  overflow: hidden;
+}
+
+.grid-thumbnail {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .grid-card-preview.is-folder {
@@ -1098,6 +1132,7 @@ button, input, select {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
     padding: 16px 16px 24px;
   }

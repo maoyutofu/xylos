@@ -11,8 +11,14 @@ GitHub Actions builds release packages automatically when you push a tag.
 - trigger: `git push origin <tag>`
 - platforms: Linux, macOS Apple Silicon, macOS Intel, Windows
 - package version: uses the tag name directly
-- outputs: workflow artifacts and GitHub Release assets named like
-  `xylos-<tag>-<platform>`
+- outputs: workflow artifacts and GitHub Release assets
+- each platform has two packages:
+  - `xylos-<tag>-<platform>`: server binary and configuration files only
+  - `xylos-<tag>-<platform>-with-app`: also includes the `app/dist` PWA files
+
+When using a `-with-app` package, start `xylos` from the extracted directory to
+serve the web client at `/app/`. The regular package does not include the web
+client; build it separately and place it at `app/dist`.
 
 ## Configuration
 

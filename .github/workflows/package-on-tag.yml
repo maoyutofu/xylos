@@ -12,8 +12,42 @@ env:
   BINARY_NAME: xylos
 
 jobs:
+  build-app:
+    name: build-pwa
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache app cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app -> target
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --version 0.7.10 --locked
+
+      - name: Build PWA
+        working-directory: app
+        run: ./build.sh
+
+      - name: Upload PWA build
+        uses: actions/upload-artifact@v4
+        with:
+          name: xylos-pwa
+          path: app/dist
+          if-no-files-found: error
+
   build:
     name: build-${{ matrix.platform.name }}
+    needs: build-app
     runs-on: ${{ matrix.platform.os }}
     timeout-minutes: 30
     strategy:
@@ -47,6 +81,12 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      - name: Download PWA build
+        uses: actions/download-artifact@v4
+        with:
+          name: xylos-pwa
+          path: pwa-dist
+
       - name: Build release
         run: cargo build --release
 
@@ -63,27 +103,51 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          APP_PACKAGE_NAME="${{ steps.meta.outputs.package_name }}-with-app"
           mkdir -p dist/${{ steps.meta.outputs.package_name }}
           cp target/release/${BINARY_NAME}${{ matrix.platform.binary_suffix }} dist/${{ steps.meta.outputs.package_name }}/
           cp README.md README.zh-CN.md config.example.toml dist/${{ steps.meta.outputs.package_name }}/
           tar -czf dist/${{ steps.meta.outputs.package_name }}.tar.gz -C dist ${{ steps.meta.outputs.package_name }}
 
+          test -f pwa-dist/index.html
+          mkdir -p "dist/${APP_PACKAGE_NAME}/app"
+          cp target/release/${BINARY_NAME}${{ matrix.platform.binary_suffix }} "dist/${APP_PACKAGE_NAME}/"
+          cp README.md README.zh-CN.md config.example.toml "dist/${APP_PACKAGE_NAME}/"
+          cp -R pwa-dist "dist/${APP_PACKAGE_NAME}/app/dist"
+          tar -czf "dist/${APP_PACKAGE_NAME}.tar.gz" -C dist "${APP_PACKAGE_NAME}"
+
       - name: Package archive (windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $appPackageName = "${{ steps.meta.outputs.package_name }}-with-app"
           New-Item -ItemType Directory -Force -Path "dist/${{ steps.meta.outputs.package_name }}" | Out-Null
           Copy-Item "target/release/${env:BINARY_NAME}${{ matrix.platform.binary_suffix }}" "dist/${{ steps.meta.outputs.package_name }}/"
           Copy-Item "README.md","README.zh-CN.md","config.example.toml" "dist/${{ steps.meta.outputs.package_name }}/"
           Compress-Archive -Path "dist/${{ steps.meta.outputs.package_name }}" -DestinationPath "dist/${{ steps.meta.outputs.package_name }}.zip" -Force
 
-      - name: Upload workflow artifact
+          if (-not (Test-Path "pwa-dist/index.html")) { throw "PWA build is missing pwa-dist/index.html" }
+          New-Item -ItemType Directory -Force -Path "dist/$appPackageName/app" | Out-Null
+          Copy-Item "target/release/${env:BINARY_NAME}${{ matrix.platform.binary_suffix }}" "dist/$appPackageName/"
+          Copy-Item "README.md","README.zh-CN.md","config.example.toml" "dist/$appPackageName/"
+          Copy-Item -Recurse "pwa-dist" "dist/$appPackageName/app/dist"
+          Compress-Archive -Path "dist/$appPackageName" -DestinationPath "dist/$appPackageName.zip" -Force
+
+      - name: Upload workflow artifact (without app)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.meta.outputs.package_name }}
           path: dist/${{ steps.meta.outputs.package_name }}.${{ matrix.platform.archive_ext }}
 
+      - name: Upload workflow artifact (with app)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.package_name }}-with-app
+          path: dist/${{ steps.meta.outputs.package_name }}-with-app.${{ matrix.platform.archive_ext }}
+
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ steps.meta.outputs.package_name }}.${{ matrix.platform.archive_ext }}
+          files: |
+            dist/${{ steps.meta.outputs.package_name }}.${{ matrix.platform.archive_ext }}
+            dist/${{ steps.meta.outputs.package_name }}-with-app.${{ matrix.platform.archive_ext }}

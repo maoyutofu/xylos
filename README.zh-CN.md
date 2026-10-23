@@ -11,8 +11,13 @@ Xylos 是一个可配置的 Rust WebDAV 服务。
 - 触发方式：`git push origin <tag>`
 - 支持平台：Linux、macOS Apple Silicon、macOS Intel、Windows
 - 包版本号：直接使用 tag 名
-- 输出位置：workflow artifacts 和 GitHub Release 附件，命名形式为
-  `xylos-<tag>-<platform>`
+- 输出位置：workflow artifacts 和 GitHub Release 附件
+- 每个平台提供两种包：
+  - `xylos-<tag>-<platform>`：仅包含服务端程序和配置文件
+  - `xylos-<tag>-<platform>-with-app`：额外包含 `app/dist` PWA 静态文件
+
+使用 `-with-app` 包时，请在解压后的目录中启动 `xylos`，即可访问 `/app/`
+页面。普通包不包含 Web 客户端，需要自行构建并放置 `app/dist`。
 
 ## 配置
 
