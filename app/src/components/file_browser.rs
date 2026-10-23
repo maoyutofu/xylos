@@ -7,8 +7,8 @@ use crate::components::thumbnail::{is_thumbnail_image, ImageThumbnail};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
-    download_bytes, execute_write, format_date, format_size, is_online, join_path, list_directory,
-    parent_path,
+    cached_directory, download_bytes, execute_write, format_date, format_size, is_online,
+    join_path, list_directory, parent_path,
 };
 use dioxus::prelude::*;
 
@@ -24,7 +24,7 @@ pub fn FileBrowser(
 
     let server_sig = use_signal(|| server.clone());
     let mut current_path = use_signal(|| "/".to_string());
-    let mut entries = use_signal(Vec::<Entry>::new);
+    let entries = use_signal(Vec::<Entry>::new);
     let mut loading = use_signal(|| false);
     let mut view_mode = use_signal(|| ViewMode::List);
     let mut sort_field = use_signal(|| SortField::Name);
@@ -42,8 +42,14 @@ pub fn FileBrowser(
 
     let load_dir = move |path: String| {
         let mut menu_sig = active_menu;
+        let mut entries = entries;
+        let mut current_path = current_path;
         menu_sig.set(None);
         let srv = server_sig();
+        if let Some(cached) = cached_directory(&srv, &path) {
+            entries.set(cached);
+            current_path.set(path.clone());
+        }
         spawn(async move {
             loading.set(true);
             match list_directory(&srv, &path).await {

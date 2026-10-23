@@ -11,6 +11,10 @@ if ! command -v dx >/dev/null 2>&1; then
     echo "install it with: cargo install dioxus-cli" >&2
     exit 1
 fi
+if ! command -v node >/dev/null 2>&1; then
+    echo "error: Node.js is required to generate the PWA offline cache" >&2
+    exit 1
+fi
 
 echo "Building Dioxus Web client..."
 # Dioxus may retain hashed assets from an earlier build in its output directory.
@@ -39,6 +43,8 @@ if ! grep -q "manifest.webmanifest" "$DIST_DIR/index.html"; then
     sed -i.bak -e "s|</head>|${PWA_HEAD}</head>|g" "$DIST_DIR/index.html"
     rm -f "$DIST_DIR/index.html.bak"
 fi
+
+node "$SCRIPT_DIR/generate-sw.mjs"
 
 echo "Static files copied to: $DIST_DIR"
 echo "Start Xylos from the project root with:"

@@ -82,7 +82,7 @@ pub async fn test_server_connection(server: &ServerAccount) -> Result<(), String
 pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<Entry>, String> {
     let cache_key = format!("xylos.webdav.cache.{}{}", server.base_url, path);
     if !is_online() {
-        return LocalStorage::get(&cache_key).map_err(|_| "当前离线，且该目录尚未缓存".into());
+        return cached_directory(server, path).ok_or_else(|| "当前离线，且该目录尚未缓存".into());
     }
 
     let url = join_url(&server.base_url, path);
@@ -93,8 +93,16 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
         .header(CONTENT_TYPE, "application/xml");
     request = add_auth(request, server);
 
-    let response = request.send().await.map_err(network_error)?;
+    let response = match request.send().await {
+        Ok(response) => response,
+        Err(error) => return cached_directory(server, path).ok_or_else(|| network_error(error)),
+    };
     if !response.status().is_success() && response.status().as_u16() != 207 {
+        if response.status().is_server_error() {
+            if let Some(entries) = cached_directory(server, path) {
+                return Ok(entries);
+            }
+        }
         if response.status().as_u16() == 401 {
             return Err("认证失败，请检查账号密码".into());
         }
@@ -104,7 +112,10 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
         ));
     }
 
-    let body = response.text().await.map_err(network_error)?;
+    let body = match response.text().await {
+        Ok(body) => body,
+        Err(error) => return cached_directory(server, path).ok_or_else(|| network_error(error)),
+    };
     let parsed: MultiStatus =
         from_str(&body).map_err(|error| format!("无法解析 WebDAV 响应: {error}"))?;
 
@@ -144,6 +155,10 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
 
     let _ = LocalStorage::set(&cache_key, &entries);
     Ok(entries)
+}
+
+pub fn cached_directory(server: &ServerAccount, path: &str) -> Option<Vec<Entry>> {
+    LocalStorage::get(&format!("xylos.webdav.cache.{}{}", server.base_url, path)).ok()
 }
 
 pub async fn execute_write(

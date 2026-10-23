@@ -1,39 +1,45 @@
-const CACHE = "xylos-webdav-shell-v4";
-const SHELL = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
+const CACHE_PREFIX = "xylos-webdav-shell-";
+const CACHE = "xylos-webdav-shell-dev";
+const PRECACHE = ["/app/", "/app/index.html", "/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).catch(() => {})
+    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
-    )
+      Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+        .map((key) => caches.delete(key)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin || !url.pathname.startsWith("/app/")) return;
+  const request = event.request;
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== self.location.origin ||
+      !url.pathname.startsWith("/app/")) return;
 
-  // Network-First strategy: always fetch latest when online, fallback to cache when offline
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200 && event.request.method === "GET") {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cached) => cached || caches.match("/app/"));
-      })
-  );
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(request, { ignoreSearch: request.mode === "navigate" });
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(request);
+      if (response.ok && PRECACHE.includes(url.pathname)) {
+        event.waitUntil(cache.put(request, response.clone()));
+      }
+      return response;
+    } catch (error) {
+      if (request.mode === "navigate") {
+        const shell = await cache.match("/app/index.html");
+        if (shell) return shell;
+      }
+      throw error;
+    }
+  })());
 });
-
