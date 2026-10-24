@@ -8,8 +8,8 @@ use axum::body::Body;
 use axum::body::to_bytes;
 use axum::extract::{Query, Request, State};
 use axum::http::header::{
-    ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName, IF_NONE_MATCH,
-    LAST_MODIFIED, VARY, WWW_AUTHENTICATE,
+    ALLOW, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName,
+    IF_NONE_MATCH, LAST_MODIFIED, VARY, WWW_AUTHENTICATE,
 };
 
 use axum::http::{HeaderValue, Response, StatusCode};
@@ -17,7 +17,7 @@ use axum::routing::{any, get};
 use axum_server::tls_rustls::RustlsConfig;
 use futures_util::StreamExt;
 use percent_encoding::{AsciiSet, CONTROLS};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::time::Duration;
@@ -35,6 +35,7 @@ use crate::lock::{LockStore, submitted_lock_tokens, timeout_from_header};
 use crate::permission::required_permission;
 use crate::prop::{DeadProperty, PropStore, parse_proppatch};
 use crate::thumbnail::{ThumbnailError, ThumbnailService};
+use crate::ticket::TicketStore;
 
 const MAX_PROPPATCH_BYTES: usize = 1024 * 1024;
 static NEXT_UPLOAD_ID: AtomicU64 = AtomicU64::new(1);
@@ -62,6 +63,7 @@ struct AppState {
     lock_store: Arc<LockStore>,
     prop_store: Arc<PropStore>,
     thumbnails: Arc<ThumbnailService>,
+    ticket_store: Arc<TicketStore>,
     allowed_methods: HeaderValue,
 }
 
@@ -129,12 +131,15 @@ fn app(config: AppConfig, thumbnails: Arc<ThumbnailService>) -> Router {
         lock_store: Arc::new(LockStore::new()),
         prop_store: Arc::new(PropStore::new()),
         thumbnails,
+        ticket_store: Arc::new(TicketStore::new(60)),
         config: Arc::new(config),
         allowed_methods,
     };
 
     let app = Router::new()
         .route("/_xylos/thumbnail", get(thumbnail_response))
+        .route("/_xylos/download/ticket", axum::routing::post(download_ticket_response))
+        .route("/_xylos/download", get(download_file_response))
         .nest_service(
             "/app",
             ServeDir::new("app/dist").append_index_html_on_directories(true),
@@ -291,6 +296,198 @@ fn thumbnail_error_response(error: ThumbnailError) -> Response<Body> {
             warn!(error = %error, "thumbnail request failed");
             empty_response(StatusCode::INTERNAL_SERVER_ERROR)
         }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct DownloadTicketRequest {
+    path: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DownloadTicketResponse {
+    ticket: String,
+    url: String,
+    expires_in: u64,
+}
+
+async fn download_ticket_response(
+    State(state): State<AppState>,
+    request: Request,
+) -> Response<Body> {
+    let method_name = "POST";
+    let request_uri = request
+        .uri()
+        .path_and_query()
+        .map(|path_and_query| path_and_query.as_str().to_owned())
+        .unwrap_or_else(|| request.uri().path().to_owned());
+
+    let (parts, body) = request.into_parts();
+    let principal = match authenticate(
+        &state.config,
+        &parts.headers,
+        method_name,
+        &request_uri,
+        &state.nonce_store,
+    ) {
+        Ok(principal) => principal,
+        Err(_) => {
+            return unauthorized_response(www_authenticate_values(
+                &state.config,
+                &state.nonce_store,
+            ));
+        }
+    };
+
+    if !principal
+        .permissions
+        .contains(&crate::config::Permission::Read)
+    {
+        return empty_response(StatusCode::FORBIDDEN);
+    }
+
+    let bytes = match to_bytes(body, 64 * 1024).await {
+        Ok(bytes) => bytes,
+        Err(_) => return empty_response(StatusCode::BAD_REQUEST),
+    };
+    let payload: DownloadTicketRequest = match serde_json::from_slice(&bytes) {
+        Ok(payload) => payload,
+        Err(_) => return empty_response(StatusCode::BAD_REQUEST),
+    };
+
+    let dav_path = match resolve_dav_path_with_root(&state.config, &principal.root_dir, &payload.path)
+    {
+        Ok(path) => path,
+        Err(PathError::OutsideBasePath) => return empty_response(StatusCode::NOT_FOUND),
+        Err(PathError::InvalidEncoding | PathError::UnsafePath) => {
+            return empty_response(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    let source = match canonicalize_existing_under_root(&principal.root_dir, &dav_path.fs_path) {
+        Ok(path) => path,
+        Err(CanonicalPathError::Path(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return empty_response(StatusCode::NOT_FOUND);
+        }
+        Err(CanonicalPathError::OutsideRoot) => return empty_response(StatusCode::FORBIDDEN),
+        Err(_) => return empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    if let Ok(metadata) = tokio::fs::metadata(&source).await {
+        if metadata.is_dir() {
+            return empty_response(StatusCode::METHOD_NOT_ALLOWED);
+        }
+    } else {
+        return empty_response(StatusCode::NOT_FOUND);
+    }
+
+    let ticket = state.ticket_store.issue(&principal.username, &dav_path.href_path);
+    let encoded_path = percent_encoding::utf8_percent_encode(&payload.path, PATH_SEGMENT_ENCODE_SET).to_string();
+    let download_url = format!("/_xylos/download?path={encoded_path}&ticket={ticket}");
+    let response_body = DownloadTicketResponse {
+        ticket,
+        url: download_url,
+        expires_in: 60,
+    };
+
+    let json = match serde_json::to_string(&response_body) {
+        Ok(json) => json,
+        Err(_) => return empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "application/json")
+        .header(CACHE_CONTROL, "no-store")
+        .body(Body::from(json))
+        .expect("json response should be valid")
+}
+
+#[derive(Debug, Deserialize)]
+struct DownloadFileQuery {
+    path: String,
+    ticket: String,
+}
+
+async fn download_file_response(
+    State(state): State<AppState>,
+    Query(query): Query<DownloadFileQuery>,
+) -> Response<Body> {
+    let (username, authorized_href) = match state.ticket_store.validate(&query.ticket) {
+        Some(pair) => pair,
+        None => return empty_response(StatusCode::FORBIDDEN),
+    };
+
+    let user = match state.config.users.iter().find(|u| u.username == username && u.enabled) {
+        Some(user) => user,
+        None => return empty_response(StatusCode::FORBIDDEN),
+    };
+
+    let dav_path = match resolve_dav_path_with_root(&state.config, &user.root_dir, &query.path) {
+        Ok(path) => path,
+        Err(PathError::OutsideBasePath) => return empty_response(StatusCode::NOT_FOUND),
+        Err(PathError::InvalidEncoding | PathError::UnsafePath) => {
+            return empty_response(StatusCode::BAD_REQUEST);
+        }
+    };
+
+    if dav_path.href_path != authorized_href {
+        return empty_response(StatusCode::FORBIDDEN);
+    }
+
+    let source = match canonicalize_existing_under_root(&user.root_dir, &dav_path.fs_path) {
+        Ok(path) => path,
+        Err(CanonicalPathError::Path(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return empty_response(StatusCode::NOT_FOUND);
+        }
+        Err(CanonicalPathError::OutsideRoot) => return empty_response(StatusCode::FORBIDDEN),
+        Err(_) => return empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    let metadata = match tokio::fs::metadata(&source).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return empty_response(StatusCode::NOT_FOUND);
+        }
+        Err(_) => return empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
+    if metadata.is_dir() {
+        return empty_response(StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    let file_name = source
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+
+    let mime = mime_guess::from_path(&source).first_or_octet_stream();
+    let encoded_filename = percent_encoding::utf8_percent_encode(file_name, PATH_SEGMENT_ENCODE_SET).to_string();
+    let safe_filename = file_name.replace('"', "_").replace('\\', "_");
+    let content_disposition = format!(
+        "attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
+    );
+
+    let mut builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, mime.as_ref())
+        .header(CONTENT_LENGTH, metadata.len().to_string())
+        .header(CONTENT_DISPOSITION, content_disposition)
+        .header(CACHE_CONTROL, "private, no-cache")
+        .header(ETAG, etag(&metadata));
+
+    if let Ok(modified) = metadata.modified() {
+        builder = builder.header(LAST_MODIFIED, httpdate::fmt_http_date(modified));
+    }
+
+    match tokio::fs::File::open(&source).await {
+        Ok(file) => {
+            let stream = tokio_util::io::ReaderStream::new(file);
+            builder
+                .body(Body::from_stream(stream))
+                .expect("stream response should be valid")
+        }
+        Err(_) => empty_response(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 

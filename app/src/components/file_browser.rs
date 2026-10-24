@@ -615,6 +615,8 @@ pub fn FileBrowser(
 fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
     let url = serde_json::to_string(&crate::webdav::join_url(&server.base_url, &entry.href))
         .unwrap_or_else(|_| "''".into());
+    let entry_href = serde_json::to_string(&entry.href).unwrap_or_else(|_| "''".into());
+    let base_url = serde_json::to_string(&server.base_url).unwrap_or_else(|_| "''".into());
     let name = serde_json::to_string(&entry.name).unwrap_or_else(|_| "'file'".into());
     let auth_type = serde_json::to_string(&server.auth_type.label()).unwrap_or_else(|_| "\"Basic\"".into());
     let username = serde_json::to_string(&server.username).unwrap_or_else(|_| "''".into());
@@ -624,7 +626,8 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
     format!(
         r#"
             try {{
-            const url={url}, name={name}, authType={auth_type};
+            const url={url}, entryHref={entry_href}, baseUrl={base_url};
+            const name={name}, authType={auth_type};
             const username={username}, password={password}, token={token};
             const predefinedType={content_type};
             const headers={{}};
@@ -634,6 +637,32 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
                 const encoded = new TextEncoder().encode(`${{username}}:${{password}}`);
                 headers.Authorization = `Basic ${{btoa(Array.from(encoded, byte => String.fromCharCode(byte)).join(""))}}`;
             }}
+
+            if (!window.showSaveFilePicker) {{
+                try {{
+                    const ticketUrl = `${{baseUrl.replace(/\/+$/, '')}}/_xylos/download/ticket`;
+                    const ticketRes = await fetch(ticketUrl, {{
+                        method: 'POST',
+                        headers: {{
+                            ...headers,
+                            'Content-Type': 'application/json'
+                        }},
+                        body: JSON.stringify({{ path: entryHref }})
+                    }});
+                    if (ticketRes.ok) {{
+                        const data = await ticketRes.json();
+                        if (data && data.url) {{
+                            const origin = baseUrl.replace(/\/+$/, '');
+                            const downloadUrl = `${{origin}}${{data.url.startsWith('/') ? '' : '/'}}${{data.url}}`;
+                            window.location.href = downloadUrl;
+                            return true;
+                        }}
+                    }}
+                }} catch (ticketErr) {{
+                    console.warn("Xylos ticket download failed, falling back", ticketErr);
+                }}
+            }}
+
             const response = await fetch(url, {{ headers }});
             if (!response.ok) throw new Error(`WebDAV 返回 ${{response.status}}`);
             if (window.showSaveFilePicker && response.body) {{
