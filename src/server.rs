@@ -852,8 +852,10 @@ async fn get_file_response(
         return empty_response(StatusCode::METHOD_NOT_ALLOWED);
     }
 
+    let mime = mime_guess::from_path(&path).first_or_octet_stream();
     let mut builder = Response::builder()
         .status(StatusCode::OK)
+        .header(CONTENT_TYPE, mime.as_ref())
         .header(CONTENT_LENGTH, metadata.len().to_string())
         .header(ETAG, etag(&metadata));
     if let Ok(modified) = metadata.modified() {
@@ -1344,6 +1346,12 @@ fn prop_response(
     } else {
         etag(metadata)
     };
+    let content_type = if metadata.is_dir() {
+        String::new()
+    } else {
+        let mime = mime_guess::from_path(href_path).first_or_octet_stream();
+        format!("<D:getcontenttype>{}</D:getcontenttype>", xml_escape(mime.as_ref()))
+    };
     let dead_properties = dead_properties
         .iter()
         .map(dead_property_xml)
@@ -1351,13 +1359,14 @@ fn prop_response(
         .join("");
 
     format!(
-        "<D:response><D:href>{}</D:href><D:propstat><D:prop><D:displayname>{}</D:displayname>{}<D:getcontentlength>{}</D:getcontentlength><D:getlastmodified>{}</D:getlastmodified><D:getetag>{}</D:getetag><D:supportedlock/><D:lockdiscovery/>{}</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>",
+        "<D:response><D:href>{}</D:href><D:propstat><D:prop><D:displayname>{}</D:displayname>{}<D:getcontentlength>{}</D:getcontentlength><D:getlastmodified>{}</D:getlastmodified><D:getetag>{}</D:getetag>{}<D:supportedlock/><D:lockdiscovery/>{}</D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>",
         xml_escape(&href),
         xml_escape(&display_name),
         resource_type,
         content_length,
         xml_escape(&last_modified),
         xml_escape(&etag),
+        content_type,
         dead_properties
     )
 }

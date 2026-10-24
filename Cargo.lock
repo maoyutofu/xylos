@@ -1616,6 +1616,7 @@ dependencies = [
  "httpdate",
  "image",
  "md5",
+ "mime_guess",
  "percent-encoding",
  "rand_core",
  "roxmltree",

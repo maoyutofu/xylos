@@ -99,9 +99,10 @@ pub fn FileBrowser(
         let srv = server_sig();
         let eval = dioxus::document::eval(&stream_download_script(&srv, &entry));
         let name = entry.name.clone();
+        on_notify.call(tr.notify_downloading(&name));
         spawn(async move {
             match eval.join::<bool>().await {
-                Ok(true) => on_notify.call(tr.notify_downloading(&name)),
+                Ok(true) => {}
                 Ok(false) => on_error.call("浏览器不支持流式下载".into()),
                 Err(error) => on_error.call(format!("下载失败：{error}")),
             }
@@ -619,11 +620,13 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
     let username = serde_json::to_string(&server.username).unwrap_or_else(|_| "''".into());
     let password = serde_json::to_string(&server.password).unwrap_or_else(|_| "''".into());
     let token = serde_json::to_string(&server.token).unwrap_or_else(|_| "''".into());
+    let content_type = serde_json::to_string(&entry.content_type).unwrap_or_else(|_| "null".into());
     format!(
         r#"
             try {{
             const url={url}, name={name}, authType={auth_type};
             const username={username}, password={password}, token={token};
+            const predefinedType={content_type};
             const headers={{}};
             if (authType === "Bearer") {{
                 headers.Authorization = `Bearer ${{token}}`;
@@ -650,12 +653,60 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
                 }}
             }} else {{
                 const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
+                let mimeType = predefinedType || response.headers.get("content-type") || "";
+                mimeType = mimeType.split(";")[0].trim();
+                if (!mimeType || mimeType === "application/octet-stream") {{
+                    const ext = name.split(".").pop().toLowerCase();
+                    const map = {{
+                        "png": "image/png",
+                        "jpg": "image/jpeg",
+                        "jpeg": "image/jpeg",
+                        "webp": "image/webp",
+                        "gif": "image/gif",
+                        "svg": "image/svg+xml",
+                        "pdf": "application/pdf",
+                        "txt": "text/plain",
+                        "md": "text/markdown",
+                        "json": "application/json",
+                        "mp4": "video/mp4",
+                        "mp3": "audio/mpeg",
+                        "zip": "application/zip",
+                        "tar": "application/x-tar",
+                        "gz": "application/gzip",
+                        "apk": "application/vnd.android.package-archive"
+                    }};
+                    if (map[ext]) mimeType = map[ext];
+                }}
+                const typedBlob = mimeType ? new Blob([blob], {{ type: mimeType }}) : blob;
+                const file = new File([typedBlob], name, {{ type: typedBlob.type }});
+
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                if (isMobile && navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+                    try {{
+                        await navigator.share({{
+                            files: [file],
+                            title: name,
+                        }});
+                        return true;
+                    }} catch (shareErr) {{
+                        if (shareErr.name === "AbortError") {{
+                            return true;
+                        }}
+                        console.warn("navigator.share failed, fallback to anchor download", shareErr);
+                    }}
+                }}
+
+                const objectUrl = URL.createObjectURL(typedBlob);
                 const anchor = document.createElement("a");
                 anchor.href = objectUrl;
                 anchor.download = name;
+                anchor.style.display = "none";
+                document.body.appendChild(anchor);
                 anchor.click();
-                setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                setTimeout(() => {{
+                    document.body.removeChild(anchor);
+                    URL.revokeObjectURL(objectUrl);
+                }}, 2000);
             }}
             return true;
             }} catch (error) {{
