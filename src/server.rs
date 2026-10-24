@@ -8,8 +8,8 @@ use axum::body::Body;
 use axum::body::to_bytes;
 use axum::extract::{Query, Request, State};
 use axum::http::header::{
-    ALLOW, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE, ETAG, HeaderName,
-    IF_NONE_MATCH, LAST_MODIFIED, VARY, WWW_AUTHENTICATE,
+    ACCEPT_RANGES, ALLOW, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE,
+    CONTENT_TYPE, ETAG, HeaderName, IF_NONE_MATCH, LAST_MODIFIED, RANGE, VARY, WWW_AUTHENTICATE,
 };
 
 use axum::http::{HeaderValue, Response, StatusCode};
@@ -136,10 +136,20 @@ fn app(config: AppConfig, thumbnails: Arc<ThumbnailService>) -> Router {
         allowed_methods,
     };
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/_xylos/thumbnail", get(thumbnail_response))
         .route("/_xylos/download/ticket", axum::routing::post(download_ticket_response))
-        .route("/_xylos/download", get(download_file_response))
+        .route("/_xylos/download", get(download_file_response));
+
+    if state.config.server.base_path != "/" {
+        let base = state.config.server.base_path.trim_end_matches('/');
+        app = app
+            .route(&format!("{base}/_xylos/thumbnail"), get(thumbnail_response))
+            .route(&format!("{base}/_xylos/download/ticket"), axum::routing::post(download_ticket_response))
+            .route(&format!("{base}/_xylos/download"), get(download_file_response));
+    }
+
+    let app = app
         .nest_service(
             "/app",
             ServeDir::new("app/dist").append_index_html_on_directories(true),
@@ -299,9 +309,33 @@ fn thumbnail_error_response(error: ThumbnailError) -> Response<Body> {
     }
 }
 
+fn resolve_ticket_path(
+    config: &AppConfig,
+    root_dir: &std::path::Path,
+    path: &str,
+) -> Result<crate::fs::DavPath, PathError> {
+    if let Ok(dav_path) = resolve_dav_path_with_root(config, root_dir, path) {
+        return Ok(dav_path);
+    }
+    let prefixed = if config.server.base_path == "/" {
+        format!("/{}", path.trim_start_matches('/'))
+    } else {
+        format!(
+            "{}/{}",
+            config.server.base_path.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        )
+    };
+    resolve_dav_path_with_root(config, root_dir, &prefixed)
+}
+
 #[derive(Debug, Deserialize)]
 struct DownloadTicketRequest {
     path: String,
+    #[serde(default)]
+    inline: bool,
+    #[serde(default)]
+    expires_in: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -355,7 +389,7 @@ async fn download_ticket_response(
         Err(_) => return empty_response(StatusCode::BAD_REQUEST),
     };
 
-    let dav_path = match resolve_dav_path_with_root(&state.config, &principal.root_dir, &payload.path)
+    let dav_path = match resolve_ticket_path(&state.config, &principal.root_dir, &payload.path)
     {
         Ok(path) => path,
         Err(PathError::OutsideBasePath) => return empty_response(StatusCode::NOT_FOUND),
@@ -381,13 +415,20 @@ async fn download_ticket_response(
         return empty_response(StatusCode::NOT_FOUND);
     }
 
-    let ticket = state.ticket_store.issue(&principal.username, &dav_path.href_path);
-    let encoded_path = percent_encoding::utf8_percent_encode(&payload.path, PATH_SEGMENT_ENCODE_SET).to_string();
-    let download_url = format!("/_xylos/download?path={encoded_path}&ticket={ticket}");
+    let default_ttl = if payload.inline { 3600 } else { 300 };
+    let ttl_secs = payload.expires_in.unwrap_or(default_ttl).clamp(10, 86400);
+    let ticket = state.ticket_store.issue_with_ttl(
+        &principal.username,
+        &dav_path.href_path,
+        Duration::from_secs(ttl_secs),
+    );
+    let encoded_path = percent_encoding::utf8_percent_encode(&dav_path.href_path, PATH_SEGMENT_ENCODE_SET).to_string();
+    let inline_param = if payload.inline { "&inline=1" } else { "" };
+    let download_url = format!("/_xylos/download?path={encoded_path}&ticket={ticket}{inline_param}");
     let response_body = DownloadTicketResponse {
         ticket,
         url: download_url,
-        expires_in: 60,
+        expires_in: ttl_secs,
     };
 
     let json = match serde_json::to_string(&response_body) {
@@ -407,11 +448,49 @@ async fn download_ticket_response(
 struct DownloadFileQuery {
     path: String,
     ticket: String,
+    #[serde(default)]
+    inline: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ByteRange {
+    start: u64,
+    end: u64,
+}
+
+fn parse_range(range_header: &str, file_size: u64) -> Option<ByteRange> {
+    let range = range_header.trim().strip_prefix("bytes=")?;
+    let (start_str, end_str) = range.split_once('-')?;
+    if start_str.is_empty() {
+        let len: u64 = end_str.parse().ok()?;
+        if len == 0 || file_size == 0 {
+            return None;
+        }
+        let start = file_size.saturating_sub(len);
+        let end = file_size.saturating_sub(1);
+        Some(ByteRange { start, end })
+    } else {
+        let start: u64 = start_str.parse().ok()?;
+        if start >= file_size {
+            return None;
+        }
+        let end: u64 = if end_str.is_empty() {
+            file_size.saturating_sub(1)
+        } else {
+            let parsed_end: u64 = end_str.parse().ok()?;
+            parsed_end.min(file_size.saturating_sub(1))
+        };
+        if start > end {
+            return None;
+        }
+        Some(ByteRange { start, end })
+    }
 }
 
 async fn download_file_response(
     State(state): State<AppState>,
     Query(query): Query<DownloadFileQuery>,
+    request: Request,
 ) -> Response<Body> {
     let (username, authorized_href) = match state.ticket_store.validate(&query.ticket) {
         Some(pair) => pair,
@@ -423,7 +502,7 @@ async fn download_file_response(
         None => return empty_response(StatusCode::FORBIDDEN),
     };
 
-    let dav_path = match resolve_dav_path_with_root(&state.config, &user.root_dir, &query.path) {
+    let dav_path = match resolve_ticket_path(&state.config, &user.root_dir, &query.path) {
         Ok(path) => path,
         Err(PathError::OutsideBasePath) => return empty_response(StatusCode::NOT_FOUND),
         Err(PathError::InvalidEncoding | PathError::UnsafePath) => {
@@ -461,18 +540,30 @@ async fn download_file_response(
         .and_then(|n| n.to_str())
         .unwrap_or("file");
 
+    let is_inline = query
+        .inline
+        .as_deref()
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+    let disposition_type = if is_inline { "inline" } else { "attachment" };
+
     let mime = mime_guess::from_path(&source).first_or_octet_stream();
     let encoded_filename = percent_encoding::utf8_percent_encode(file_name, PATH_SEGMENT_ENCODE_SET).to_string();
     let safe_filename = file_name.replace('"', "_").replace('\\', "_");
     let content_disposition = format!(
-        "attachment; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
+        "{disposition_type}; filename=\"{safe_filename}\"; filename*=UTF-8''{encoded_filename}"
     );
 
+    let total_size = metadata.len();
+    let range_header = request
+        .headers()
+        .get(RANGE)
+        .and_then(|v| v.to_str().ok());
+
     let mut builder = Response::builder()
-        .status(StatusCode::OK)
         .header(CONTENT_TYPE, mime.as_ref())
-        .header(CONTENT_LENGTH, metadata.len().to_string())
         .header(CONTENT_DISPOSITION, content_disposition)
+        .header(ACCEPT_RANGES, "bytes")
         .header(CACHE_CONTROL, "private, no-cache")
         .header(ETAG, etag(&metadata));
 
@@ -480,14 +571,52 @@ async fn download_file_response(
         builder = builder.header(LAST_MODIFIED, httpdate::fmt_http_date(modified));
     }
 
-    match tokio::fs::File::open(&source).await {
-        Ok(file) => {
-            let stream = tokio_util::io::ReaderStream::new(file);
-            builder
-                .body(Body::from_stream(stream))
-                .expect("stream response should be valid")
+    if let Some(range_raw) = range_header {
+        if let Some(range) = parse_range(range_raw, total_size) {
+            let chunk_len = range.end - range.start + 1;
+            builder = builder
+                .status(StatusCode::PARTIAL_CONTENT)
+                .header(CONTENT_LENGTH, chunk_len.to_string())
+                .header(
+                    CONTENT_RANGE,
+                    format!("bytes {}-{}/{}", range.start, range.end, total_size),
+                );
+
+            match tokio::fs::File::open(&source).await {
+                Ok(mut file) => {
+                    use tokio::io::AsyncSeekExt;
+                    if file.seek(std::io::SeekFrom::Start(range.start)).await.is_err() {
+                        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
+                    }
+                    use tokio::io::AsyncReadExt;
+                    let stream = tokio_util::io::ReaderStream::new(file.take(chunk_len));
+                    builder
+                        .body(Body::from_stream(stream))
+                        .expect("stream response should be valid")
+                }
+                Err(_) => empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        } else {
+            Response::builder()
+                .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                .header(CONTENT_RANGE, format!("bytes */{total_size}"))
+                .body(Body::empty())
+                .expect("range error response should be valid")
         }
-        Err(_) => empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+    } else {
+        builder = builder
+            .status(StatusCode::OK)
+            .header(CONTENT_LENGTH, total_size.to_string());
+
+        match tokio::fs::File::open(&source).await {
+            Ok(file) => {
+                let stream = tokio_util::io::ReaderStream::new(file);
+                builder
+                    .body(Body::from_stream(stream))
+                    .expect("stream response should be valid")
+            }
+            Err(_) => empty_response(StatusCode::INTERNAL_SERVER_ERROR),
+        }
     }
 }
 

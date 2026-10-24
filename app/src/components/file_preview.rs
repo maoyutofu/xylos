@@ -1,9 +1,9 @@
 use crate::components::icons::{
-    IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconFile, IconImage,
+    IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconFile, IconImage, IconLink,
 };
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount};
-use crate::webdav::{download_bytes, format_date, format_size};
+use crate::webdav::{copy_to_clipboard, download_bytes, format_date, format_size, get_direct_ticket_url};
 use dioxus::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -85,10 +85,7 @@ impl PreviewKind {
     fn max_size(self) -> Option<u64> {
         match self {
             Self::Text => Some(2 * MIB),
-            Self::Image => Some(20 * MIB),
-            Self::Pdf => Some(40 * MIB),
-            Self::Audio | Self::Video => Some(64 * MIB),
-            Self::Unsupported => None,
+            Self::Image | Self::Pdf | Self::Audio | Self::Video | Self::Unsupported => None,
         }
     }
 }
@@ -150,6 +147,7 @@ pub fn FilePreviewModal(
     directory_entries: Vec<Entry>,
     on_close: EventHandler<()>,
     on_download: EventHandler<Entry>,
+    #[props(default)] on_notify: Option<EventHandler<String>>,
 ) -> Element {
     let lang = use_context::<Signal<Language>>()();
     let tr = I18n::new(lang);
@@ -167,6 +165,7 @@ pub fn FilePreviewModal(
     let request_images = images.clone();
     let request_fallback = entry.clone();
     let request_version_for_effect = request_version.clone();
+    let effect_server = server.clone();
     use_effect(move || {
         let index = current_index();
         let selected_entry = request_images
@@ -189,9 +188,23 @@ pub fn FilePreviewModal(
             }
         }
 
-        let server = server.clone();
+        let server = effect_server.clone();
         let request_version = request_version_for_effect.clone();
         spawn(async move {
+            if matches!(kind, PreviewKind::Image | PreviewKind::Pdf | PreviewKind::Video | PreviewKind::Audio) {
+                if let Ok(direct_url) = get_direct_ticket_url(&server, &selected_entry.href, true, Some(7200)).await {
+                    if request_version.get() != version {
+                        return;
+                    }
+                    if let Some(previous_url) = active_blob_url() {
+                        revoke_blob_url(&previous_url);
+                        active_blob_url.set(None);
+                    }
+                    body.set(PreviewBody::Media { url: direct_url, kind });
+                    return;
+                }
+            }
+
             let result = download_bytes(&server, &selected_entry.href).await;
             if request_version.get() != version {
                 return;
@@ -254,6 +267,34 @@ pub fn FilePreviewModal(
             .cloned()
             .unwrap_or_else(|| download_fallback.clone());
         on_download.call(selected_entry);
+    });
+
+    let copy_link_images = images.clone();
+    let copy_link_fallback = entry.clone();
+    let copy_link_server = server.clone();
+    let copy_link_notify = on_notify.clone();
+    let copy_link = EventHandler::new(move |_| {
+        let selected_entry = copy_link_images
+            .get(current_index())
+            .cloned()
+            .unwrap_or_else(|| copy_link_fallback.clone());
+        let srv = copy_link_server.clone();
+        let notify = copy_link_notify.clone();
+        spawn(async move {
+            match get_direct_ticket_url(&srv, &selected_entry.href, false, Some(3600)).await {
+                Ok(url) => {
+                    copy_to_clipboard(&url);
+                    if let Some(n) = notify {
+                        n.call(tr.notify_link_copied().into());
+                    }
+                }
+                Err(_) => {
+                    if let Some(n) = notify {
+                        n.call(tr.notify_copy_link_failed().into());
+                    }
+                }
+            }
+        });
     });
 
     let selected_entry = images
@@ -339,6 +380,13 @@ pub fn FilePreviewModal(
                     div { class: "preview-header-actions",
                         if has_gallery {
                             span { class: "preview-position-pill", "{position} / {image_count}" }
+                        }
+                        button {
+                            class: "preview-action-btn",
+                            title: "{tr.menu_copy_link()}",
+                            aria_label: "{tr.menu_copy_link()}",
+                            onclick: move |_| copy_link.call(()),
+                            IconLink {}
                         }
                         button {
                             class: "preview-action-btn",

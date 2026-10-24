@@ -2,7 +2,7 @@ use crate::models::{AuthType, Entry, ServerAccount};
 use gloo_storage::{LocalStorage, Storage};
 use quick_xml::de::from_str;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderName};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 struct MultiStatus {
@@ -265,7 +265,89 @@ pub async fn download_thumbnail(
     }
 }
 
-fn url_origin(base_url: &str) -> Option<String> {
+#[derive(Debug, Serialize)]
+struct TicketRequest<'a> {
+    path: &'a str,
+    #[serde(default)]
+    inline: bool,
+    #[serde(default)]
+    expires_in: Option<u64>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct TicketResponse {
+    ticket: String,
+    url: String,
+    expires_in: u64,
+}
+
+pub async fn get_direct_ticket_url(
+    server: &ServerAccount,
+    path: &str,
+    inline: bool,
+    expires_in: Option<u64>,
+) -> Result<String, String> {
+    let clean_base = server.base_url.trim_end_matches('/');
+    let origin = url_origin(&server.base_url).unwrap_or_else(|| clean_base.to_string());
+    let endpoints = [
+        format!("{clean_base}/_xylos/download/ticket"),
+        format!("{origin}/_xylos/download/ticket"),
+    ];
+
+    let payload = TicketRequest {
+        path,
+        inline,
+        expires_in,
+    };
+
+    let client = reqwest::Client::new();
+    for endpoint in endpoints {
+        let req = client.post(&endpoint).json(&payload);
+        if let Ok(res) = add_auth(req, server).send().await {
+            if res.status().is_success() {
+                if let Ok(ticket_resp) = res.json::<TicketResponse>().await {
+                    let target_origin = if ticket_resp.url.starts_with("http") {
+                        String::new()
+                    } else {
+                        origin.clone()
+                    };
+                    let full_url = if ticket_resp.url.starts_with('/') {
+                        format!("{target_origin}{}", ticket_resp.url)
+                    } else if ticket_resp.url.starts_with("http") {
+                        ticket_resp.url
+                    } else {
+                        format!("{target_origin}/{}", ticket_resp.url)
+                    };
+                    return Ok(full_url);
+                }
+            }
+        }
+    }
+    Err("Failed to get direct ticket url".into())
+}
+
+pub fn copy_to_clipboard(text: &str) {
+    let script = format!(
+        r#"
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText({text:?});
+        }} else {{
+            const textarea = document.createElement("textarea");
+            textarea.value = {text:?};
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+        }}
+        "#
+    );
+    let _ = dioxus::document::eval(&script);
+}
+
+pub fn url_origin(base_url: &str) -> Option<String> {
     let (scheme, rest) = base_url.split_once("://")?;
     if scheme.is_empty() || rest.is_empty() {
         return None;

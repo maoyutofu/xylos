@@ -25,11 +25,15 @@ impl TicketStore {
     }
 
     pub fn issue(&self, username: &str, href_path: &str) -> String {
+        self.issue_with_ttl(username, href_path, self.ttl)
+    }
+
+    pub fn issue_with_ttl(&self, username: &str, href_path: &str, ttl: Duration) -> String {
         let mut bytes = [0u8; 16];
         OsRng.fill_bytes(&mut bytes);
         let ticket: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
 
-        let expires_at = Instant::now() + self.ttl;
+        let expires_at = Instant::now() + ttl;
         let mut tickets = self
             .tickets
             .lock()
