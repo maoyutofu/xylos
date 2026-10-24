@@ -1,6 +1,6 @@
 const CACHE_PREFIX = "xylos-webdav-shell-";
-const CACHE = "xylos-webdav-shell-89b06a8231f6eb7e";
-const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxhee48b6847fda11fc.js","/app/assets/xylos-webdav-client_bg-dxh1c94d361d2540fb.wasm","/app/index.html","/app/manifest.webmanifest"];
+const CACHE = "xylos-webdav-shell-2b3046b59f1bf5cb";
+const PRECACHE = ["/app/","/app/assets/apple-touch-icon.png","/app/assets/icon-192.png","/app/assets/icon-512.png","/app/assets/icon.png","/app/assets/icon.svg","/app/assets/style.css","/app/assets/xylos-webdav-client-dxhbf8fddcf5c9f13b.js","/app/assets/xylos-webdav-client_bg-dxh7fb1b6e73f1eb996.wasm","/app/index.html","/app/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

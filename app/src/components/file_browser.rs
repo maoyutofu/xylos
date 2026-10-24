@@ -620,7 +620,8 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
     let password = serde_json::to_string(&server.password).unwrap_or_else(|_| "''".into());
     let token = serde_json::to_string(&server.token).unwrap_or_else(|_| "''".into());
     format!(
-        r#"(async()=>{{
+        r#"
+            try {{
             const url={url}, name={name}, authType={auth_type};
             const username={username}, password={password}, token={token};
             const headers={{}};
@@ -657,6 +658,10 @@ fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
                 setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
             }}
             return true;
-        }})()"#
+            }} catch (error) {{
+                console.error("Xylos download failed", error);
+                return false;
+            }}
+        "#
     )
 }
