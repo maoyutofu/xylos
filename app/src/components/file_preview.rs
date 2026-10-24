@@ -1,9 +1,9 @@
 use crate::components::icons::{
-    IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconFile, IconImage, IconLink,
+    IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconFile, IconImage,
 };
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount};
-use crate::webdav::{copy_to_clipboard, download_bytes, format_date, format_size, get_direct_ticket_url};
+use crate::webdav::{download_bytes, format_date, format_size, get_direct_ticket_url};
 use dioxus::prelude::*;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -269,34 +269,6 @@ pub fn FilePreviewModal(
         on_download.call(selected_entry);
     });
 
-    let copy_link_images = images.clone();
-    let copy_link_fallback = entry.clone();
-    let copy_link_server = server.clone();
-    let copy_link_notify = on_notify.clone();
-    let copy_link = EventHandler::new(move |_| {
-        let selected_entry = copy_link_images
-            .get(current_index())
-            .cloned()
-            .unwrap_or_else(|| copy_link_fallback.clone());
-        let srv = copy_link_server.clone();
-        let notify = copy_link_notify.clone();
-        spawn(async move {
-            match get_direct_ticket_url(&srv, &selected_entry.href, false, Some(3600)).await {
-                Ok(url) => {
-                    copy_to_clipboard(&url);
-                    if let Some(n) = notify {
-                        n.call(tr.notify_link_copied().into());
-                    }
-                }
-                Err(_) => {
-                    if let Some(n) = notify {
-                        n.call(tr.notify_copy_link_failed().into());
-                    }
-                }
-            }
-        });
-    });
-
     let selected_entry = images
         .get(current_index())
         .cloned()
@@ -380,13 +352,6 @@ pub fn FilePreviewModal(
                     div { class: "preview-header-actions",
                         if has_gallery {
                             span { class: "preview-position-pill", "{position} / {image_count}" }
-                        }
-                        button {
-                            class: "preview-action-btn",
-                            title: "{tr.menu_copy_link()}",
-                            aria_label: "{tr.menu_copy_link()}",
-                            onclick: move |_| copy_link.call(()),
-                            IconLink {}
                         }
                         button {
                             class: "preview-action-btn",

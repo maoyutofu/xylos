@@ -369,18 +369,6 @@ impl I18n {
         if self.is_zh() { "下载" } else { "Download" }
     }
 
-    pub fn menu_copy_link(&self) -> &'static str {
-        if self.is_zh() { "复制直链" } else { "Copy Link" }
-    }
-
-    pub fn notify_link_copied(&self) -> &'static str {
-        if self.is_zh() { "直链已复制到剪贴板（1小时有效）" } else { "Direct link copied to clipboard (valid for 1 hour)" }
-    }
-
-    pub fn notify_copy_link_failed(&self) -> &'static str {
-        if self.is_zh() { "获取直链失败" } else { "Failed to get direct link" }
-    }
-
     pub fn menu_preview(&self) -> &'static str {
         if self.is_zh() { "预览" } else { "Preview" }
     }

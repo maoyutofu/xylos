@@ -327,26 +327,6 @@ pub async fn get_direct_ticket_url(
     Err("Failed to get direct ticket url".into())
 }
 
-pub fn copy_to_clipboard(text: &str) {
-    let script = format!(
-        r#"
-        if (navigator.clipboard && navigator.clipboard.writeText) {{
-            navigator.clipboard.writeText({text:?});
-        }} else {{
-            const textarea = document.createElement("textarea");
-            textarea.value = {text:?};
-            textarea.style.position = "fixed";
-            textarea.style.opacity = "0";
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand("copy");
-            document.body.removeChild(textarea);
-        }}
-        "#
-    );
-    let _ = dioxus::document::eval(&script);
-}
-
 pub fn url_origin(base_url: &str) -> Option<String> {
     let (scheme, rest) = base_url.split_once("://")?;
     if scheme.is_empty() || rest.is_empty() {

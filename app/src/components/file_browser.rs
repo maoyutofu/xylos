@@ -1,14 +1,14 @@
 use crate::components::file_preview::FilePreviewModal;
 use crate::components::icons::{
-    IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconLink, IconList,
+    IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconList,
     IconMore, IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
 };
 use crate::components::thumbnail::{is_thumbnail_image, ImageThumbnail};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
-    cached_directory, copy_to_clipboard, execute_write, format_date, format_size,
-    get_direct_ticket_url, is_online, join_path, list_directory, parent_path,
+    cached_directory, execute_write, format_date, format_size,
+    is_online, join_path, list_directory, parent_path,
 };
 use dioxus::prelude::*;
 
@@ -105,23 +105,6 @@ pub fn FileBrowser(
                 Ok(true) => {}
                 Ok(false) => on_error.call("浏览器不支持流式下载".into()),
                 Err(error) => on_error.call(format!("下载失败：{error}")),
-            }
-        });
-    };
-
-    let handle_copy_link = move |entry: Entry| {
-        let srv = server_sig();
-        let tr_copied = tr.notify_link_copied();
-        let tr_failed = tr.notify_copy_link_failed();
-        spawn(async move {
-            match get_direct_ticket_url(&srv, &entry.href, false, Some(3600)).await {
-                Ok(url) => {
-                    copy_to_clipboard(&url);
-                    on_notify.call(tr_copied.into());
-                }
-                Err(_) => {
-                    on_error.call(tr_failed.into());
-                }
             }
         });
     };
@@ -324,7 +307,6 @@ pub fn FileBrowser(
                             let item_click = item.clone();
                             let item_preview = item.clone();
                             let item_download = item.clone();
-                            let item_copy_link = item.clone();
                             let item_rename = item.clone();
                             let item_delete = item.clone();
                             let href = item.href.clone();
@@ -414,15 +396,6 @@ pub fn FileBrowser(
                                                         IconDownload {}
                                                         span { "{tr.menu_download()}" }
                                                     }
-                                                    button {
-                                                        class: "popover-item",
-                                                        onclick: move |_| {
-                                                            active_menu.set(None);
-                                                            handle_copy_link(item_copy_link.clone());
-                                                        },
-                                                        IconLink {}
-                                                        span { "{tr.menu_copy_link()}" }
-                                                    }
                                                 }
                                                 button {
                                                     class: "popover-item",
@@ -458,7 +431,6 @@ pub fn FileBrowser(
                     for item in sorted_entries.into_iter() {
                         {
                             let item_click = item.clone();
-                            let item_copy_link = item.clone();
                             let item_rename = item.clone();
                             let item_delete = item.clone();
                             let is_dir = item.is_dir;
@@ -500,15 +472,6 @@ pub fn FileBrowser(
                                         div {
                                             style: "display: flex; gap: 4px;",
                                             onclick: move |e| e.stop_propagation(),
-                                            if !is_dir {
-                                                button {
-                                                    class: "tool-btn",
-                                                    style: "width: 28px; height: 28px;",
-                                                    title: "{tr.menu_copy_link()}",
-                                                    onclick: move |_| handle_copy_link(item_copy_link.clone()),
-                                                    IconLink {}
-                                                }
-                                            }
                                             button {
                                                 class: "tool-btn",
                                                 style: "width: 28px; height: 28px;",
