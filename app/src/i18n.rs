@@ -443,6 +443,26 @@ impl I18n {
         if self.is_zh() { "重命名" } else { "Rename" }
     }
 
+    pub fn menu_move(&self) -> &'static str {
+        if self.is_zh() { "移动到" } else { "Move to" }
+    }
+
+    pub fn modal_move_title(&self, name: &str) -> String {
+        if self.is_zh() { format!("移动 {name}") } else { format!("Move {name}") }
+    }
+
+    pub fn modal_move_destination(&self) -> &'static str {
+        if self.is_zh() { "目标目录" } else { "Destination folder" }
+    }
+
+    pub fn modal_move_empty(&self) -> &'static str {
+        if self.is_zh() { "没有子目录" } else { "No subfolders" }
+    }
+
+    pub fn notify_moved(&self) -> &'static str {
+        if self.is_zh() { "移动成功" } else { "Moved successfully" }
+    }
+
     pub fn menu_delete(&self) -> &'static str {
         if self.is_zh() { "删除" } else { "Delete" }
     }

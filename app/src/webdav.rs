@@ -80,7 +80,7 @@ pub async fn test_server_connection(server: &ServerAccount) -> Result<(), String
 }
 
 pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<Entry>, String> {
-    let cache_key = format!("xylos.webdav.cache.{}{}", server.base_url, path);
+    let cache_key = directory_cache_key(server, path);
     if !is_online() {
         return cached_directory(server, path).ok_or_else(|| "当前离线，且该目录尚未缓存".into());
     }
@@ -158,7 +158,31 @@ pub async fn list_directory(server: &ServerAccount, path: &str) -> Result<Vec<En
 }
 
 pub fn cached_directory(server: &ServerAccount, path: &str) -> Option<Vec<Entry>> {
-    LocalStorage::get(&format!("xylos.webdav.cache.{}{}", server.base_url, path)).ok()
+    LocalStorage::get(&directory_cache_key(server, path)).ok()
+}
+
+fn directory_cache_key(server: &ServerAccount, path: &str) -> String {
+    format!("xylos.webdav.cache.{}{}", server.base_url, path)
+}
+
+pub fn cache_moved_entry(server: &ServerAccount, source_dir: &str, destination_dir: &str, entry: &Entry) {
+    if let Some(mut source) = cached_directory(server, source_dir) {
+        source.retain(|item| item.href != entry.href);
+        let _ = LocalStorage::set(&directory_cache_key(server, source_dir), &source);
+    }
+    if let Some(mut destination) = cached_directory(server, destination_dir) {
+        let moved = moved_cache_entry(entry, destination_dir);
+        destination.retain(|item| item.href != moved.href);
+        destination.push(moved);
+        let _ = LocalStorage::set(&directory_cache_key(server, destination_dir), &destination);
+    }
+}
+
+fn moved_cache_entry(entry: &Entry, destination_dir: &str) -> Entry {
+    let mut moved = entry.clone();
+    moved.href = format!("{}/{}", destination_dir.trim_end_matches('/'), entry.name);
+    moved.etag = None;
+    moved
 }
 
 pub async fn execute_write(
@@ -173,6 +197,7 @@ pub async fn execute_write(
     if !is_online() {
         return Err("当前处于离线状态，写操作已禁用".into());
     }
+    let is_move = method.as_str() == "MOVE";
     let client = reqwest::Client::new();
     let mut request = add_auth(
         client.request(method, join_url(&server.base_url, path)),
@@ -185,9 +210,11 @@ pub async fn execute_write(
         request = request.header(CONTENT_TYPE, content_type);
     }
     if let Some(destination) = destination {
+        let destination_url = reqwest::Url::parse(&join_url(&server.base_url, &destination))
+            .map_err(|error| format!("目标路径无效: {error}"))?;
         request = request.header(
             HeaderName::from_static("destination"),
-            join_url(&server.base_url, &destination),
+            destination_url.as_str(),
         );
         request = request.header(HeaderName::from_static("overwrite"), "F");
     }
@@ -198,7 +225,11 @@ pub async fn execute_write(
     if response.status().is_success() || response.status().as_u16() == 207 {
         Ok(())
     } else if response.status().as_u16() == 412 {
-        Err("写操作冲突：远端文件已被修改，请刷新后重试".into())
+        if is_move {
+            Err("移动失败：目标已存在或源文件已被修改，请刷新后重试".into())
+        } else {
+            Err("写操作冲突：远端文件已被修改，请刷新后重试".into())
+        }
     } else if response.status().as_u16() == 403 {
         Err("服务器拒绝写操作 (403)：请检查该账号是否具有相应权限（重命名需要 move 权限）".into())
     } else {
@@ -497,6 +528,20 @@ fn network_error(error: reqwest::Error) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moved_cache_entry_uses_new_decoded_path_and_clears_etag() {
+        let entry = Entry {
+            name: "中文 file.txt".into(),
+            href: "/source/中文 file.txt".into(),
+            etag: Some("old-etag".into()),
+            ..Entry::default()
+        };
+        let moved = moved_cache_entry(&entry, "/target");
+        assert_eq!(moved.href, "/target/中文 file.txt");
+        assert_eq!(moved.etag, None);
+        assert_eq!(entry.href, "/source/中文 file.txt");
+    }
 
     #[test]
     fn root_href_is_not_listed_as_its_own_child() {

@@ -1,13 +1,13 @@
 use crate::components::file_preview::FilePreviewModal;
 use crate::components::icons::{
     IconArrowBack, IconDownload, IconEye, IconFile, IconFolder, IconGrid, IconList,
-    IconMore, IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
+    IconMore, IconMove, IconNewFolder, IconPencil, IconRefresh, IconSort, IconTrash, IconUpload,
 };
 use crate::components::thumbnail::{is_thumbnail_image, ImageThumbnail};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
-    cached_directory, execute_write, format_date, format_size,
+    cached_directory, cache_moved_entry, execute_write, format_date, format_size,
     is_online, join_path, list_directory, parent_path,
 };
 use dioxus::prelude::*;
@@ -37,6 +37,11 @@ pub fn FileBrowser(
 
     let mut rename_target = use_signal(|| None::<Entry>);
     let mut rename_name = use_signal(String::new);
+    let mut move_target = use_signal(|| None::<Entry>);
+    let mut move_path = use_signal(|| "/".to_string());
+    let mut move_entries = use_signal(Vec::<Entry>::new);
+    let mut move_loading = use_signal(|| false);
+    let mut move_ready = use_signal(|| false);
     let mut delete_target = use_signal(|| None::<Entry>);
     let mut preview_target = use_signal(|| None::<Entry>);
 
@@ -164,6 +169,56 @@ pub fn FileBrowser(
                 Err(err) => on_error.call(err),
             }
             loading.set(false);
+        });
+    };
+
+    let mut browse_move_dir = move |path: String| {
+        let srv = server_sig();
+        move_ready.set(false);
+        move_loading.set(true);
+        spawn(async move {
+            match list_directory(&srv, &path).await {
+                Ok(items) => {
+                    move_entries.set(items);
+                    move_path.set(path);
+                    move_ready.set(true);
+                }
+                Err(err) => on_error.call(err),
+            }
+            move_loading.set(false);
+        });
+    };
+
+    let mut open_move = move |entry: Entry| {
+        active_menu.set(None);
+        move_entries.set(Vec::new());
+        move_path.set(current_path());
+        move_ready.set(false);
+        move_target.set(Some(entry));
+        browse_move_dir(current_path());
+    };
+
+    let mut handle_move = move || {
+        let Some(target) = move_target() else { return };
+        let destination_dir = move_path();
+        if move_loading() || !move_ready() || !valid_move_destination(&target, &destination_dir) {
+            return;
+        }
+        let srv = server_sig();
+        let source_dir = parent_path(&target.href);
+        let dest = move_destination_path(&destination_dir, &target.href);
+        move_loading.set(true);
+        spawn(async move {
+            match execute_write(&srv, reqwest::Method::from_bytes(b"MOVE").unwrap(), &target.href, None, None, Some(dest), target.etag.clone()).await {
+                Ok(()) => {
+                    cache_moved_entry(&srv, &source_dir, &destination_dir, &target);
+                    move_target.set(None);
+                    on_notify.call(tr.notify_moved().into());
+                    load_dir(source_dir);
+                }
+                Err(err) => on_error.call(err),
+            }
+            move_loading.set(false);
         });
     };
 
@@ -308,6 +363,7 @@ pub fn FileBrowser(
                             let item_preview = item.clone();
                             let item_download = item.clone();
                             let item_rename = item.clone();
+                            let item_move = item.clone();
                             let item_delete = item.clone();
                             let href = item.href.clone();
                             let is_dir = item.is_dir;
@@ -408,6 +464,12 @@ pub fn FileBrowser(
                                                     span { "{tr.menu_rename()}" }
                                                 }
                                                 button {
+                                                    class: "popover-item",
+                                                    onclick: move |_| open_move(item_move.clone()),
+                                                    IconMove {}
+                                                    span { "{tr.menu_move()}" }
+                                                }
+                                                button {
                                                     class: "popover-item danger",
                                                     onclick: move |_| {
                                                         active_menu.set(None);
@@ -432,6 +494,7 @@ pub fn FileBrowser(
                         {
                             let item_click = item.clone();
                             let item_rename = item.clone();
+                            let item_move = item.clone();
                             let item_delete = item.clone();
                             let is_dir = item.is_dir;
                             let is_img = !is_dir && is_thumbnail_image(&item.name);
@@ -481,6 +544,13 @@ pub fn FileBrowser(
                                                     rename_target.set(Some(item_rename.clone()));
                                                 },
                                                 IconPencil {}
+                                            }
+                                            button {
+                                                class: "tool-btn",
+                                                style: "width: 28px; height: 28px;",
+                                                title: "{tr.menu_move()}",
+                                                onclick: move |_| open_move(item_move.clone()),
+                                                IconMove {}
                                             }
                                             button {
                                                 class: "tool-btn danger",
@@ -568,6 +638,58 @@ pub fn FileBrowser(
                 }
             }
 
+            // Move Modal
+            if let Some(target) = move_target() {
+                div { class: "modal-backdrop",
+                    onclick: move |_| { if !move_loading() { move_target.set(None); } },
+                    div { class: "modal-dialog",
+                        onclick: move |e| e.stop_propagation(),
+                        div { class: "modal-header", "{tr.modal_move_title(&target.name)}" }
+                        div { class: "modal-body",
+                            div { class: "form-field",
+                                label { class: "form-label", "{tr.modal_move_destination()}" }
+                                div { class: "move-location",
+                                    button {
+                                        class: "tool-btn",
+                                        title: "{tr.tooltip_back()}",
+                                        disabled: move_loading() || move_path() == "/",
+                                        onclick: move |_| browse_move_dir(parent_path(&move_path())),
+                                        IconArrowBack {}
+                                    }
+                                    span { title: "{move_path()}", "{move_path()}" }
+                                }
+                                div { class: "move-folder-list",
+                                    if move_loading() {
+                                        div { class: "move-folder-empty", "{tr.loading_files()}" }
+                                    } else if !move_entries().iter().any(|entry| entry.is_dir && valid_move_destination(&target, &entry.href)) {
+                                        div { class: "move-folder-empty", "{tr.modal_move_empty()}" }
+                                    } else {
+                                        for folder in move_entries().into_iter().filter(|entry| entry.is_dir && valid_move_destination(&target, &entry.href)) {
+                                            button {
+                                                key: "{folder.href}",
+                                                class: "move-folder-item",
+                                                onclick: move |_| browse_move_dir(folder.href.clone()),
+                                                IconFolder { is_large: false }
+                                                span { "{folder.name}" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        div { class: "modal-footer",
+                            button { class: "btn-secondary", disabled: move_loading(), onclick: move |_| move_target.set(None), "{tr.cancel()}" }
+                            button {
+                                class: "btn-primary",
+                                disabled: move_loading() || !move_ready() || !valid_move_destination(&target, &move_path()),
+                                onclick: move |_| handle_move(),
+                                "{tr.menu_move()}"
+                            }
+                        }
+                    }
+                }
+            }
+
             // Delete Confirm Modal
             if let Some(target) = delete_target() {
                 div { class: "modal-backdrop",
@@ -610,6 +732,52 @@ pub fn FileBrowser(
             }
 
         }
+    }
+}
+
+fn valid_move_destination(target: &Entry, directory: &str) -> bool {
+    let directory = directory.trim_end_matches('/');
+    let source = target.href.trim_end_matches('/');
+    directory != parent_path(source).trim_end_matches('/')
+        && (!target.is_dir || (directory != source && !directory.starts_with(&format!("{source}/"))))
+}
+
+fn move_destination_path(directory: &str, source_href: &str) -> String {
+    let name = source_href.trim_end_matches('/').rsplit('/').next().unwrap_or_default();
+    join_path(directory, name)
+}
+
+#[cfg(test)]
+mod move_tests {
+    use super::*;
+
+    fn folder(href: &str) -> Entry {
+        Entry {
+            name: "folder".into(),
+            href: href.into(),
+            is_dir: true,
+            size: None,
+            modified: String::new(),
+            etag: None,
+            content_type: None,
+        }
+    }
+
+    #[test]
+    fn rejects_current_parent_and_own_descendants() {
+        let target = folder("/parent/folder/");
+        assert!(!valid_move_destination(&target, "/parent"));
+        assert!(!valid_move_destination(&target, "/parent/folder"));
+        assert!(!valid_move_destination(&target, "/parent/folder/child"));
+        assert!(valid_move_destination(&target, "/other"));
+    }
+
+    #[test]
+    fn preserves_encoded_name_in_destination() {
+        assert_eq!(
+            move_destination_path("/other", "/parent/中文 file.txt"),
+            "/other/%E4%B8%AD%E6%96%87%20file.txt"
+        );
     }
 }
 

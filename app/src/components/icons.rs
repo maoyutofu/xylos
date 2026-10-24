@@ -139,6 +139,23 @@ pub fn IconPencil() -> Element {
 }
 
 #[component]
+pub fn IconMove() -> Element {
+    rsx! {
+        svg {
+            "viewBox": "0 0 24 24",
+            "width": "18",
+            "height": "18",
+            "fill": "none",
+            "stroke": "currentColor",
+            "stroke_width": "2",
+            "stroke_linecap": "round",
+            "stroke_linejoin": "round",
+            path { "d": "M4 7h10m-3-3 3 3-3 3M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6" }
+        }
+    }
+}
+
+#[component]
 pub fn IconTrash() -> Element {
     rsx! {
         svg {
