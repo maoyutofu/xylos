@@ -7,8 +7,8 @@ use crate::components::thumbnail::{is_thumbnail_image, ImageThumbnail};
 use crate::i18n::I18n;
 use crate::models::{Entry, Language, ServerAccount, SortField, ViewMode};
 use crate::webdav::{
-    cached_directory, download_bytes, execute_write, format_date, format_size, is_online,
-    join_path, list_directory, parent_path,
+    cached_directory, execute_write, format_date, format_size, is_online, join_path, list_directory,
+    parent_path,
 };
 use dioxus::prelude::*;
 
@@ -97,18 +97,13 @@ pub fn FileBrowser(
 
     let handle_download = move |entry: Entry| {
         let srv = server_sig();
+        let eval = dioxus::document::eval(&stream_download_script(&srv, &entry));
+        let name = entry.name.clone();
         spawn(async move {
-            match download_bytes(&srv, &entry.href).await {
-                Ok(bytes) => {
-                    let encoded = base64_encode(&bytes);
-                    let safe_name = serde_json::to_string(&entry.name).unwrap_or_else(|_| "'file'".into());
-                    let script = format!(
-                        "const a=document.createElement('a');a.href='data:application/octet-stream;base64,{encoded}';a.download={safe_name};a.click();"
-                    );
-                    let _ = dioxus::document::eval(&script);
-                    on_notify.call(tr.notify_downloading(&entry.name));
-                }
-                Err(err) => on_error.call(err),
+            match eval.join::<bool>().await {
+                Ok(true) => on_notify.call(tr.notify_downloading(&name)),
+                Ok(false) => on_error.call("浏览器不支持流式下载".into()),
+                Err(error) => on_error.call(format!("下载失败：{error}")),
             }
         });
     };
@@ -616,17 +611,52 @@ pub fn FileBrowser(
     }
 }
 
-fn base64_encode(bytes: &[u8]) -> String {
-    const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((bytes.len() + 2) / 3 * 4);
-    for chunk in bytes.chunks(3) {
-        let a = chunk[0] as usize;
-        let b = chunk.get(1).copied().unwrap_or(0) as usize;
-        let c = chunk.get(2).copied().unwrap_or(0) as usize;
-        result.push(TABLE[a >> 2] as char);
-        result.push(TABLE[((a & 3) << 4) | (b >> 4)] as char);
-        result.push(if chunk.len() > 1 { TABLE[((b & 15) << 2) | (c >> 6)] as char } else { '=' });
-        result.push(if chunk.len() > 2 { TABLE[c & 63] as char } else { '=' });
-    }
-    result
+fn stream_download_script(server: &ServerAccount, entry: &Entry) -> String {
+    let url = serde_json::to_string(&crate::webdav::join_url(&server.base_url, &entry.href))
+        .unwrap_or_else(|_| "''".into());
+    let name = serde_json::to_string(&entry.name).unwrap_or_else(|_| "'file'".into());
+    let auth_type = serde_json::to_string(&server.auth_type.label()).unwrap_or_else(|_| "\"Basic\"".into());
+    let username = serde_json::to_string(&server.username).unwrap_or_else(|_| "''".into());
+    let password = serde_json::to_string(&server.password).unwrap_or_else(|_| "''".into());
+    let token = serde_json::to_string(&server.token).unwrap_or_else(|_| "''".into());
+    format!(
+        r#"(async()=>{{
+            const url={url}, name={name}, authType={auth_type};
+            const username={username}, password={password}, token={token};
+            const headers={{}};
+            if (authType === "Bearer") {{
+                headers.Authorization = `Bearer ${{token}}`;
+            }} else {{
+                const encoded = new TextEncoder().encode(`${{username}}:${{password}}`);
+                headers.Authorization = `Basic ${{btoa(Array.from(encoded, byte => String.fromCharCode(byte)).join(""))}}`;
+            }}
+            const response = await fetch(url, {{ headers }});
+            if (!response.ok) throw new Error(`WebDAV 返回 ${{response.status}}`);
+            if (window.showSaveFilePicker && response.body) {{
+                const handle = await window.showSaveFilePicker({{ suggestedName: name }});
+                const writable = await handle.createWritable();
+                const reader = response.body.getReader();
+                try {{
+                    while (true) {{
+                        const {{ done, value }} = await reader.read();
+                        if (done) break;
+                        await writable.write(value);
+                    }}
+                    await writable.close();
+                }} catch (error) {{
+                    await writable.abort();
+                    throw error;
+                }}
+            }} else {{
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = objectUrl;
+                anchor.download = name;
+                anchor.click();
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            }}
+            return true;
+        }})()"#
+    )
 }

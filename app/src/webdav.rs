@@ -207,9 +207,6 @@ pub async fn execute_write(
 }
 
 pub async fn download_bytes(server: &ServerAccount, path: &str) -> Result<Vec<u8>, String> {
-    if !is_online() {
-        return Err("当前处于离线状态，文件内容尚未缓存".into());
-    }
     let client = reqwest::Client::new();
     let response = add_auth(client.get(join_url(&server.base_url, path)), server)
         .send()
